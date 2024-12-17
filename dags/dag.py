@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from pprint import pprint
-from airflowfusion.fuse import create_optimized_dag
+from airflowfusion.fuse import create_optimized_dag, create_optimized_dag_integer_programming 
 
 
 def dispense50(**kwargs):
@@ -47,7 +47,7 @@ def dispense1(**kwargs):
 
 
 dag = DAG(
-    dag_id='aws_change',
+    dag_id='example',
     description='Given amount, return number of each denomination',
     schedule_interval=None
 )
@@ -61,15 +61,23 @@ t1 = PythonOperator(
     op_kwargs={'amount': 99}
 )
 
+t2 = PythonOperator(
+    task_id="dispense20",
+    python_callable=dispense20,
+    dag=dag,
+    provide_context=True,
+)
+
 
 
 # Create dependency to ensure run_get_data runs first before process_data
-t1
+t1 >> t2
 
-total_costs = {'dispense50': 2}
-read_costs = {'dispense50': {'dispense50': 0}
+total_costs = {'dispense50': 2, 'dispense20': 2}
+read_costs = {'dispense50': {'amount1': 1}, 
+              'dispense20': {'amount2': 1}, 
             }
 
-fused_dag = create_optimized_dag(dag, total_costs, read_costs, 1)
+fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
 
 

@@ -166,6 +166,11 @@ def fuse_python_functions(functions, op_kwargs_list):
 
     result.insert(0, "def fused_function(**kwargs):")
 
+    result.append("    ti = kwargs['ti']")
+    result.append("    for key, value in persistence_map.items():")
+    result.append("        ti.xcom_push(key=key, value=value)")
+
+    #print("\n".join(result))
     return "\n".join(result)
 
 def create_operator_from_task(task: TaskNode, dag: DAG) -> PythonOperator:

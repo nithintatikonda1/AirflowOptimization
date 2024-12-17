@@ -99,7 +99,6 @@ class TaskGraph:
         read_costs = self.getReadCosts()
         total_costs = self.getTotalCosts()
 
-        pprint(read_costs)
         
         return optimize_integer_program(predecessors, fusion_possible, self.scheduling_cost, total_costs, read_costs)
         
