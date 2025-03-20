@@ -152,4 +152,4 @@ read_costs = {
     'buy_sell_recommendation': {'buy_sell_recommendation': 1},
 }
 
-fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
+#fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)

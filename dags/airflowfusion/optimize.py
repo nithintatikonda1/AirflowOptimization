@@ -3,8 +3,10 @@ from gurobipy import GRB
 from collections import defaultdict
 from pprint import pprint
 import logging
+import pickle
+import os
 
-def optimize_integer_program(predecessors, fusion_possible, c, t, r):
+def optimize_integer_program(predecessors, fusion_possible, c, t, r, dag_id):
     """
     Takes two task nodes and combines them into one tasknode, reassigning the upstream and downstream tasks
 
@@ -18,6 +20,7 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     Returns:
         TaskNode: The newly created fused Task Node
     """    
+
     tasks = list(predecessors.keys())
     predecessors = predecessors.copy()
     fusion_possible = fusion_possible.copy()
@@ -188,5 +191,7 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
                 operator_edges.append((from_task, to_task))
             if f[from_task][to_task].X >= 0.5:
                 fused_edges.append((from_task, to_task))
+
+    
 
     return fused_edges, operator_edges

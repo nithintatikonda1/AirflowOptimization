@@ -6,10 +6,11 @@ import regex as re
 from collections import defaultdict
 from pprint import pprint
 
-def create_read_costs_matrix(task_graph: TaskGraph, read_costs_per_task):
+def create_read_costs_matrix(task_graph: TaskGraph, read_write_costs_per_task):
     if task_graph.fusion_performed:
         raise Exception("Fusion already performed")
-    
+
+    """
     task_id_to_read, read_to_task_ids, task_id_to_write, write_to_task_ids = analyze_task_graph(task_graph)
 
     read_costs = {}
@@ -25,7 +26,26 @@ def create_read_costs_matrix(task_graph: TaskGraph, read_costs_per_task):
                     if task_id1 in read_costs_per_task:
                         read_costs[task_id1][task_id2] = max(read_costs_per_task[task_id1].get(read, 0), read_costs[task_id1][task_id2])
 
+    return read_costs"
+    """
+    read_costs = {}
+    for task in task_graph.tasks:
+        task_id1 = task.operators[0].task_id
+        read_costs[task_id1] = {}
+        for task2 in task_graph.tasks:
+            task_id2 = task2.operators[0].task_id
+            read_costs[task_id1][task_id2] = 0
+
+            task1_reads_writes = set()
+            for backend, key, read_write in read_write_costs_per_task.get(task_id1, []):
+                task1_reads_writes.add((backend, key))
+            
+            for backend, key, read_write in read_write_costs_per_task.get(task_id2, []):
+                if read_write == "read" and (backend, key) in task1_reads_writes:
+                    read_costs[task_id1][task_id2] += read_write_costs_per_task[task_id2][(backend, key, read_write)]
+
     return read_costs
+                    
 
     
 

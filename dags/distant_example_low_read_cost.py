@@ -76,6 +76,6 @@ total_costs = {'task1': 2, 'task2': 2, 'task3': 2, 'task4': 2, 'task5': 2, 'task
 read_costs = {'task2': {'amount': 1}
             }
 
-fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
+#fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
 
 

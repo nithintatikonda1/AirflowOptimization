@@ -102,6 +102,6 @@ read_costs = {'dispense50': {'amount1': 1},
               'dispense1': {'amount4': 1}
             }
 
-fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
+#fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
 
 

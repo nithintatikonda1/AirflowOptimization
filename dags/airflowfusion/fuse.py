@@ -12,6 +12,10 @@ import logging
 from airflowfusion.analyze import create_read_costs_matrix
 from airflowfusion.task import TaskGraph, TaskNode
 from pprint import pprint
+from airflowfusion.read_write_interceptor import ReadWriteInterceptor
+from airflowfusion.operator import ParallelFusedPythonOperator
+import os
+import pickle
 
 
 def copy_operator(operator: BaseOperator, dag: DAG) -> BaseOperator:
@@ -68,7 +72,7 @@ def fuse(task1: TaskNode, task2: TaskNode) -> TaskNode:
     return fused_task
 
 
-def build_graph_from_dag(dag: DAG, total_costs: dict, read_costs: dict, scheduling_cost) -> TaskGraph:
+def build_graph_from_dag(dag: DAG, total_costs: dict = {}, read_costs: dict = {}, scheduling_cost=0) -> TaskGraph:
     """
     Takes a DAG and builds a graph of task nodes
 
@@ -83,8 +87,9 @@ def build_graph_from_dag(dag: DAG, total_costs: dict, read_costs: dict, scheduli
     
     for operator in sorted_operators:
         partition_function = None
-        #TODO: add support for partition functions
-        task = TaskNode([operator], partition_function, read_costs=read_costs.get(operator.task_id, {}), total_cost=total_costs[operator.task_id])
+        if type(operator) is ParallelFusedPythonOperator:
+            partition_function = operator.partition_function
+        task = TaskNode([operator], partition_function, read_costs=read_costs.get(operator.task_id, {}), total_cost=total_costs.get(operator.task_id, 0))
         task_map[operator] = task
 
         for upstream_operator in operator.upstream_list:
@@ -92,7 +97,7 @@ def build_graph_from_dag(dag: DAG, total_costs: dict, read_costs: dict, scheduli
             upstream_task.downstream.append(task)
             task.upstream.append(upstream_task)
 
-    task_graph =  TaskGraph(list(task_map.values()), scheduling_cost)
+    task_graph =  TaskGraph(list(task_map.values()), scheduling_cost, dag.dag_id)
 
     return task_graph
 
@@ -179,15 +184,24 @@ def create_operator_from_task(task: TaskNode, dag: DAG) -> PythonOperator:
         return copied_operator
     
     functions = [operator.python_callable for operator in task.operators]
+    op_kwarg_list = [operator.op_kwargs for operator in task.operators]
+    op_kwargs = {}
+    for kwargs in op_kwarg_list:
+        op_kwargs.update(kwargs)
+    
+    """
     op_kwargs_list = [operator._BaseOperator__init_kwargs['op_kwargs'] if 'op_kwargs' in operator._BaseOperator__init_kwargs else None for operator in task.operators]
     function_def = fuse_python_functions(functions, op_kwargs_list)
     local_scope = {}
     exec(function_def, globals(), local_scope)
     result = local_scope 
+    """
+    interceptor = ReadWriteInterceptor()
     
     return PythonOperator(
         task_id= "--".join([op.task_id for op in task.operators]),
-        python_callable=result['fused_function'],
+        python_callable=interceptor.get_pipeline_function(functions),
+        op_kwargs=op_kwargs,
         dag=dag,
     )
 
@@ -224,9 +238,9 @@ def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG):
             operator.set_downstream(downstream_operator)
 
 
-def create_optimized_dag_integer_programming(dag: DAG, total_costs: dict, read_costs: dict, scheduling_cost: int) -> DAG:
+def create_optimized_dag_integer_programming(dag: DAG, total_costs, read_costs, scheduling_cost: int, default_args=None) -> DAG:
     logging.info('Beginning creation of optimized DAG')
-    new_dag = DAG(dag_id=dag._dag_id + '_optimized')
+    new_dag = DAG(dag_id=dag._dag_id + '_optimized', default_args=default_args)
 
     for key, val in dag.__dict__.items():
         if key == '_dag_id':
@@ -243,15 +257,65 @@ def create_optimized_dag_integer_programming(dag: DAG, total_costs: dict, read_c
             new_dag.__dict__[key] = val
 
 
-    r = {t1: {t2: 0 for t2 in total_costs.keys()} for t1 in total_costs.keys()}
-    task_graph = build_graph_from_dag(dag, total_costs, r, scheduling_cost)
-    read_costs = create_read_costs_matrix(task_graph, read_costs)
+    task_graph = create_optimized_task_graph_integer_programming(dag, total_costs, read_costs, scheduling_cost)
+        
+    build_dag_from_graph(task_graph, new_dag)
+    return new_dag
 
-    for task in task_graph.tasks:
-        task.read_costs = read_costs[task.operators[0].task_id]
+def create_optimized_task_graph_integer_programming(dag: DAG, total_costs, read_write_costs, scheduling_cost: int) -> TaskGraph:
+    logging.info('Beginning creation of optimized task graph')
+    dag_id = dag._dag_id
 
+    task_graph = build_graph_from_dag(dag, scheduling_cost = scheduling_cost)
     task_ids = [task.operators[0].task_id for task in task_graph.tasks]
-    fused_edges, operator_edges = task_graph.get_fusion_variables()
+    r = {t1: {t2: 0 for t2 in task_ids} for t1 in task_ids}
+
+    fused_edges, operator_edges = None, None
+    # If IP variables already exist
+    ip_vars_found = os.path.exists(f"./include/{dag_id}.pkl")
+    if ip_vars_found:
+        logging.info("IP variables already exist")
+        with open(f"./include/{dag_id}.pkl", "rb") as f:
+            fused_edges, operator_edges = pickle.load(f)
+    else:
+        logging.info("IP variables do not exist. Preparing for IP")
+        # if total_costs is a string, user has provided
+        #print current working directory
+
+        if isinstance(total_costs, str):
+            logging.info("Getting tasks durations from file")
+            with open(total_costs, "rb") as f:
+                total_costs = pickle.load(f)
+            logging.info("Task durations loaded")
+        else:
+            logging.info("Task durations provided")
+
+        if isinstance(read_write_costs, str):
+            logging.info("Getting read costs from file")
+            with open(read_write_costs, "rb") as f:
+                read_write_costs = pickle.load(f)
+            logging.info("Read costs loaded")
+        else:
+            logging.info("Read costs provided")
+
+        read_costs = create_read_costs_matrix(task_graph, read_write_costs)
+
+        for task in task_graph.tasks:
+            task.read_costs = read_costs[task.operators[0].task_id]
+            task.total_cost = total_costs[task.operators[0].task_id]
+
+        for task in task_graph.tasks:
+            task.total_cost = total_costs[task.operators[0].task_id]
+
+        logging.info("Starting IP")
+        fused_edges, operator_edges = task_graph.get_fusion_variables()
+        logging.info("IP complete")
+        # Serialize
+        logging.info("Serializing IP variables")
+        with open(f"../include/{dag_id}.pkl", "wb") as f:
+            pickle.dump((fused_edges, operator_edges), f)
+        logging.info("IP variables serialized")
+
 
     # task_ids to operators
     task_id_to_operator = {}
@@ -303,11 +367,9 @@ def create_optimized_dag_integer_programming(dag: DAG, total_costs: dict, read_c
         task_id_to_task_node[edge[1]].upstream.append(task_id_to_task_node[edge[0]])
 
     # Create task graph
-    task_graph = TaskGraph(tasks, scheduling_cost)
+    task_graph = TaskGraph(tasks, scheduling_cost, dag.dag_id)
         
-    build_dag_from_graph(task_graph, new_dag)
-    return new_dag
-
+    return task_graph
 
 def create_optimized_dag(dag: DAG, total_costs: dict, read_costs: dict, scheduling_cost: int) -> DAG:
     logging.info('Beginning creation of optimized DAG')

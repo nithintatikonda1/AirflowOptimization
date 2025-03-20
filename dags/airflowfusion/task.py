@@ -9,6 +9,7 @@ import copy
 import logging
 from airflowfusion.optimize import optimize_integer_program
 from pprint import pprint
+from airflowfusion.operator import FusedPythonOperator, ParallelFusedPythonOperator
 
 class TaskNode:
     
@@ -54,10 +55,11 @@ class TaskNode:
     
 class TaskGraph:
 
-    def __init__(self, tasks: list[TaskNode], scheduling_cost: int):
+    def __init__(self, tasks: list[TaskNode], scheduling_cost: int, dag_id: str):
         self.tasks = tasks
         self.scheduling_cost = scheduling_cost
         self.fusion_performed = False
+        self.dag_id = dag_id
 
     def get_roots(self):
         return [task for task in self.tasks if len(task.upstream) == 0]
@@ -68,7 +70,9 @@ class TaskGraph:
     def is_fusable(self, task1: TaskNode, task2: TaskNode) -> bool:
         if task1 == task2:
             return False
-        if isinstance(task1.operators[0], PythonOperator) and isinstance(task2.operators[0], PythonOperator) and not isinstance(task1.operators[0], BranchPythonOperator) and not isinstance(task2.operators[0], BranchPythonOperator):
+        if type(task1.operators[0]) is FusedPythonOperator and type(task2.operators[0]) is FusedPythonOperator:
+            return True
+        if type(task1.operators[0]) is ParallelFusedPythonOperator and type(task2.operators[0]) is ParallelFusedPythonOperator and task1.partition_function == task2.partition_function:
             return True
         return False
     
@@ -100,7 +104,7 @@ class TaskGraph:
         total_costs = self.getTotalCosts()
 
         
-        return optimize_integer_program(predecessors, fusion_possible, self.scheduling_cost, total_costs, read_costs)
+        return optimize_integer_program(predecessors, fusion_possible, self.scheduling_cost, total_costs, read_costs, self.dag_id)
         
     def getTotalCosts(self):
         if self.fusion_performed:
@@ -119,7 +123,8 @@ class TaskGraph:
             for task2 in self.tasks:
                 task1_id = task1.operators[0].task_id
                 task2_id = task2.operators[0].task_id
-                read_costs[task1_id][task2_id] = task1.read_costs.get(task2_id, 0)
+                # read_costs[task1_id][task2_id] = task1.read_costs.get(task2_id, 0)
+                read_costs[task1_id][task2_id] = task2.read_costs.get(task1_id, 0)
 
         return read_costs
         
