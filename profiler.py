@@ -10,7 +10,7 @@ import tarfile
 import io
 
 # ----------- CONFIGURATIONS --------------
-DAGS_TO_RUN = ['example']  # Replace with your DAG IDs
+DAGS_TO_RUN = ['stock']  # Replace with your DAG IDs
 LOG_FILE_TEMPLATE = "/usr/local/airflow/dags/{}/log.txt"  # Path inside scheduler container
 OUTPUT_DIR = "./include/dag_timings"  # Directory to store parsed results
 

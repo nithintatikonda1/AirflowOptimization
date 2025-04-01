@@ -3,3 +3,4 @@ astor
 regex
 gurobipy
 scipy
+boto3

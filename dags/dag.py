@@ -3,6 +3,7 @@ from airflow.operators.python import PythonOperator
 from pprint import pprint
 from airflowfusion.fuse import create_optimized_dag, create_optimized_dag_integer_programming
 from airflowfusion.backend_registry import read, write
+from airflowfusion.operator import FusedPythonOperator
 
 from pathlib import Path
 
@@ -10,8 +11,6 @@ from pathlib import Path
 
 def dispense50(**kwargs):
     amount = kwargs['amount']
-    
-
     number_of_50 = amount // 50
     remainder = amount % 50
 
@@ -21,7 +20,6 @@ def dispense50(**kwargs):
 
 
 def dispense20(**kwargs):
-    ti = kwargs['ti']
     amount = read('xcom', 'amount')
 
     number_of_20 = amount // 20
@@ -31,24 +29,22 @@ def dispense20(**kwargs):
     write('xcom', 'amount', remainder)
 
 def dispense10(**kwargs):
-    ti = kwargs['ti']
-    amount = ti.xcom_pull(key='amount')
+    amount = read('xcom', 'amount')
 
     number_of_10 = amount // 10
     remainder = amount % 10
 
-    ti.xcom_push(key='number_of_10', value = number_of_10)
-    ti.xcom_push(key='amount', value = remainder)
+    write('xcom', 'amount', remainder)
+    write('xcom', 'number_of_10', number_of_10)
 
 def dispense1(**kwargs):
-    ti = kwargs['ti']
-    amount = ti.xcom_pull(key='amount')
+    amount = read('xcom', 'amount')
 
     number_of_1 = amount // 1
     remainder = amount % 1
 
-    ti.xcom_push(key='number_of_1', value = number_of_1)
-    ti.xcom_push(key='amount', value = remainder)
+    write('xcom', 'amount', remainder)
+    write('xcom', 'number_of_1', number_of_1)
 
 
 dag_id = 'example'
@@ -59,7 +55,7 @@ dag = DAG(
 )
 
 
-t1 = PythonOperator(
+t1 = FusedPythonOperator(
     task_id="dispense50",
     python_callable=dispense50,
     dag=dag,
@@ -67,9 +63,23 @@ t1 = PythonOperator(
     op_kwargs={'amount': 99}
 )
 
-t2 = PythonOperator(
+t2 = FusedPythonOperator(
     task_id="dispense20",
     python_callable=dispense20,
+    dag=dag,
+    provide_context=True,
+)
+
+t3 = FusedPythonOperator(
+    task_id="dispense10",
+    python_callable=dispense10,
+    dag=dag,
+    provide_context=True,
+)
+
+t4 = FusedPythonOperator(
+    task_id="dispense1",
+    python_callable=dispense1,
     dag=dag,
     provide_context=True,
 )
@@ -77,13 +87,9 @@ t2 = PythonOperator(
 
 
 # Create dependency to ensure run_get_data runs first before process_data
-t1 >> t2
+t1 >> t2 >> t3 >> t4
 
-#total_costs = {'dispense50': 2, 'dispense20': 2}
-#read_costs = {'dispense50': {'amount1': 1}, 'dispense20': {'amount2': 1}, }
 
-total_costs_file = "../include/dag_timings/example_task_durations.pkl"
-read_costs_file = "../include/dag_timings/example_timing_logs.pkl"
-fused_dag = create_optimized_dag_integer_programming(dag, total_costs_file, read_costs_file, 1)
+#fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)
 
 

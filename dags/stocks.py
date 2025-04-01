@@ -1,8 +1,10 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflowfusion.operator import FusedPythonOperator
 from airflow.operators.python import BranchPythonOperator
 from pprint import pprint
 from airflowfusion.fuse import create_optimized_dag_integer_programming
+from airflowfusion.backend_registry import read, write
 
 def checkPrice(**kwargs):
     import math
@@ -19,21 +21,22 @@ def checkPrice(**kwargs):
     print(f"Stock price is: {str(price)}")
     ti = kwargs['ti']
     ti.xcom_push(key='checkPrice', value = price)
+    write('xcom', 'checkPrice', price)
 
 def buy_sell_recommendation(**kwargs):
 
     # determine if we should buy or sell based on price
     ti = kwargs['ti']
-    _price = ti.xcom_pull(key='checkPrice')
+    _price = read('xcom', 'checkPrice')
 
-    ti.xcom_push(key='buy_sell_recommendation', value = "sell" if _price > 50 else "buy")
+    write('xcom', 'buy_sell_recommendation', "sell" if _price > 50 else "buy")
 
 def human_approval():
     pass
 
 def buy_or_sell(**kwargs):
     ti = kwargs['ti']
-    rec = ti.xcom_pull(key='buy_sell_recommendation')
+    rec = read('xcom', 'buy_sell_recommendation')
     if rec == "buy":
         return ['buy']
     return ['sell']
@@ -51,7 +54,7 @@ def buy(**kwargs):
         return math.floor(random.random() * (max - min) + min)
     
     ti = kwargs['ti']
-    _price = ti.xcom_pull(key='checkPrice')
+    _price = read('xcom', 'checkPrice')
 
     print(f"Buying for ${_price}")
     _now = datetime.datetime.now()
@@ -80,7 +83,7 @@ def sell(**kwargs):
         return math.floor(random.random() * (max - min) + min)
 
     ti = kwargs['ti']
-    _price = ti.xcom_pull(key='checkPrice')
+    _price = read('xcom', 'checkPrice')
 
     print(f"Selling for ${_price}")
     _now = datetime.datetime.now()
@@ -102,21 +105,21 @@ dag = DAG(
 )
 
 
-t1 = PythonOperator(
+t1 = FusedPythonOperator(
     task_id="checkPrice",
     python_callable=checkPrice,
     dag=dag,
     provide_context=True,
 )
 
-t2 = PythonOperator(
+t2 = FusedPythonOperator(
     task_id="buy_sell_recommendation",
     python_callable=buy_sell_recommendation,
     dag=dag,
     provide_context=True,
 )
 
-t3 = PythonOperator(
+t3 = FusedPythonOperator(
     task_id="human_approval",
     python_callable=human_approval,
     dag=dag,
@@ -128,14 +131,14 @@ branching = BranchPythonOperator(
     python_callable=buy_or_sell,
 )
 
-t4 = PythonOperator(
+t4 = FusedPythonOperator(
     task_id="buy",
     python_callable=buy,
     dag=dag,
     provide_context=True,
 )
 
-t5 = PythonOperator(
+t5 = FusedPythonOperator(
     task_id="sell",
     python_callable=sell,
     dag=dag,
@@ -146,10 +149,4 @@ t1 >> t2 >> t3 >> branching
 branching >> t4
 branching >> t5
 
-total_costs = {'checkPrice': 2, 'buy_sell_recommendation': 2, 'human_approval': 2, 'buy_or_sell': 2, 'buy': 2, 'sell': 2}
-read_costs = {
-    'checkPrice': {'checkPrice': 1},
-    'buy_sell_recommendation': {'buy_sell_recommendation': 1},
-}
-
-#fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
+fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)

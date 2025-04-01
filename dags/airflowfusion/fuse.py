@@ -13,9 +13,10 @@ from airflowfusion.analyze import create_read_costs_matrix
 from airflowfusion.task import TaskGraph, TaskNode
 from pprint import pprint
 from airflowfusion.read_write_interceptor import ReadWriteInterceptor
-from airflowfusion.operator import ParallelFusedPythonOperator
+from airflowfusion.operator import ParallelFusedPythonOperator, FusedPythonOperator
 import os
 import pickle
+from airflowfusion.backend_registry import read, write
 
 
 def copy_operator(operator: BaseOperator, dag: DAG) -> BaseOperator:
@@ -178,32 +179,105 @@ def fuse_python_functions(functions, op_kwargs_list):
     #print("\n".join(result))
     return "\n".join(result)
 
-def create_operator_from_task(task: TaskNode, dag: DAG) -> PythonOperator:
+def create_operator_from_task(task: TaskNode, dag: DAG, persistent_store: callable=None, sharding_num: int=8) -> list[PythonOperator]:
     if len(task.operators) == 1:
         copied_operator = copy_operator(task.operators[0], dag)
-        return copied_operator
+        return [copied_operator]
     
     functions = [operator.python_callable for operator in task.operators]
     op_kwarg_list = [operator.op_kwargs for operator in task.operators]
     op_kwargs = {}
     for kwargs in op_kwarg_list:
         op_kwargs.update(kwargs)
-    
-    """
-    op_kwargs_list = [operator._BaseOperator__init_kwargs['op_kwargs'] if 'op_kwargs' in operator._BaseOperator__init_kwargs else None for operator in task.operators]
-    function_def = fuse_python_functions(functions, op_kwargs_list)
-    local_scope = {}
-    exec(function_def, globals(), local_scope)
-    result = local_scope 
-    """
-    interceptor = ReadWriteInterceptor()
-    
-    return PythonOperator(
-        task_id= "--".join([op.task_id for op in task.operators]),
-        python_callable=interceptor.get_pipeline_function(functions),
-        op_kwargs=op_kwargs,
-        dag=dag,
-    )
+    if type(task.operators[0]) is FusedPythonOperator:
+        
+        """
+        op_kwargs_list = [operator._BaseOperator__init_kwargs['op_kwargs'] if 'op_kwargs' in operator._BaseOperator__init_kwargs else None for operator in task.operators]
+        function_def = fuse_python_functions(functions, op_kwargs_list)
+        local_scope = {}
+        exec(function_def, globals(), local_scope)
+        result = local_scope 
+        """
+        interceptor = ReadWriteInterceptor()
+        
+        return [PythonOperator(
+            task_id= "--".join([op.task_id for op in task.operators]),
+            python_callable=interceptor.get_pipeline_function(functions),
+            op_kwargs=op_kwargs,
+            dag=dag,
+        )]
+    elif type(task.operators[0]) is ParallelFusedPythonOperator:
+        data_collection_functions = []
+        sharding_function = task.operators[0].sharding_function
+        compute_functions = []
+        merge_function = task.operators[0].merge_function
+        write_functions = []
+
+        for operator in task.operators:
+            data_collection_functions.append(operator.data_collection_function)
+            compute_functions.append(operator.compute_function)
+            write_functions.append(operator.write_function)
+
+        # combined data collection function that returns a list of outputs from each data collection function
+        def combined_data_collection_and_sharding():
+            for task_index, data_collection_function in enumerate(data_collection_functions):
+                sharded_data = sharding_function(sharding_num,data_collection_function())
+                for sharding_index, data in enumerate(sharded_data):
+                    key = task.operators[task_index].task_id + "_" + str(sharding_index)
+                    write("xcom", key, data)
+
+        # compute function that acts on each of the sharded data
+        def combined_compute(sharding_index):
+            for task_index, compute_function in enumerate(compute_functions):
+                data = read("xcom", task.operators[task_index].task_id + "_" + str(sharding_index))
+                output = compute_function(data)
+                write("xcom", task.operators[task_index].task_id + "_" + str(sharding_index), output)
+
+        # merge data from compute functions and write merged output
+        def combinded_merge_and_write():
+            for task_index, write_function in enumerate(write_functions):
+                all_data = []
+                for sharding_index in range(sharding_num):
+                    data = read("xcom", task.operators[task_index].task_id + "_" + str(sharding_index))
+                    all_data.append(data)
+                output = merge_function(all_data)
+                write_function(output)
+        
+        interceptor = ReadWriteInterceptor()
+        starting_operator =PythonOperator(
+            task_id= "--".join([op.task_id for op in task.operators] + ["---start"]),
+            python_callable=interceptor.get_pipeline_function([combined_data_collection_and_sharding]),
+            op_kwargs=op_kwargs,
+            dag=dag,
+        )
+
+        ending_operator =PythonOperator(
+            task_id= "--".join([op.task_id for op in task.operators] + ["---end"]),
+            python_callable=interceptor.get_pipeline_function([combinded_merge_and_write]),
+            op_kwargs=op_kwargs,
+            dag=dag,
+        )
+
+        compute_operators = []
+        for i in range(sharding_num):
+            compute_operator = PythonOperator(
+                task_id= "--".join([op.task_id for op in task.operators] + ["---compute", str(i)]),\
+                python_callable=interceptor.get_pipeline_function([lambda: combined_compute(i)]),
+                op_kwargs=op_kwargs,
+                dag=dag,
+            )
+            compute_operator.set_upstream(starting_operator)
+            compute_operator.set_downstream(ending_operator)
+            compute_operators.append(compute_operator)
+
+        return [starting_operator, compute_operators, ending_operator]
+
+
+        
+
+        
+
+
 
 def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG):
     queue = deque(task_graph.get_roots())
@@ -227,18 +301,21 @@ def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG):
     """
 
     for task in task_graph.tasks:
-        operator = create_operator_from_task(task, fused_dag)
-        operator_map[task] = operator
+        operators = create_operator_from_task(task, fused_dag)
+        operator_map[task] = operators
     
     for task in task_graph.tasks:
-        operator = operator_map[task]
+        operators = operator_map[task]
 
         for downstream_task in task.downstream:
-            downstream_operator = operator_map[downstream_task]
-            operator.set_downstream(downstream_operator)
+            try:
+                downstream_operator = operator_map[downstream_task][0]
+                operators[-1].set_downstream(downstream_operator)
+            except Exception as e:
+                raise ValueError(operator_map)
 
 
-def create_optimized_dag_integer_programming(dag: DAG, total_costs, read_costs, scheduling_cost: int, default_args=None) -> DAG:
+def create_optimized_dag_integer_programming(dag: DAG, total_costs, read_write_costs, scheduling_cost: int, default_args=None) -> DAG:
     logging.info('Beginning creation of optimized DAG')
     new_dag = DAG(dag_id=dag._dag_id + '_optimized', default_args=default_args)
 
@@ -257,7 +334,7 @@ def create_optimized_dag_integer_programming(dag: DAG, total_costs, read_costs, 
             new_dag.__dict__[key] = val
 
 
-    task_graph = create_optimized_task_graph_integer_programming(dag, total_costs, read_costs, scheduling_cost)
+    task_graph = create_optimized_task_graph_integer_programming(dag, total_costs, read_write_costs, scheduling_cost)
         
     build_dag_from_graph(task_graph, new_dag)
     return new_dag
@@ -279,10 +356,9 @@ def create_optimized_task_graph_integer_programming(dag: DAG, total_costs, read_
             fused_edges, operator_edges = pickle.load(f)
     else:
         logging.info("IP variables do not exist. Preparing for IP")
-        # if total_costs is a string, user has provided
-        #print current working directory
-
-        if isinstance(total_costs, str):
+        # if total_costs is not a dict
+        if total_costs == None:
+            total_costs= f"../include/dag_timings/{dag.dag_id}_task_durations.pkl"
             logging.info("Getting tasks durations from file")
             with open(total_costs, "rb") as f:
                 total_costs = pickle.load(f)
@@ -290,13 +366,18 @@ def create_optimized_task_graph_integer_programming(dag: DAG, total_costs, read_
         else:
             logging.info("Task durations provided")
 
-        if isinstance(read_write_costs, str):
+        if read_write_costs == None:
+            read_write_costs = f"../include/dag_timings/{dag.dag_id}_timing_logs.pkl"
             logging.info("Getting read costs from file")
             with open(read_write_costs, "rb") as f:
                 read_write_costs = pickle.load(f)
             logging.info("Read costs loaded")
         else:
             logging.info("Read costs provided")
+
+        for task in task_ids:
+            if total_costs[task] == None:
+                total_costs[task] = 0
 
         read_costs = create_read_costs_matrix(task_graph, read_write_costs)
 
