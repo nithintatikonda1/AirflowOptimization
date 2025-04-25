@@ -1,6 +1,8 @@
+from collections import deque
 from airflowfusion.task import TaskGraph
 from airflow.operators.python import PythonOperator
 from airflow.models.baseoperator import BaseOperator
+from airflow.operators.python import BranchPythonOperator
 from airflowfusion.operator import ParallelFusedPythonOperator
 from airflowfusion.optimize import optimize_integer_program
 from airflow import DAG
@@ -11,6 +13,24 @@ from pprint import pprint
 def is_fusable(op1: BaseOperator, op2: BaseOperator) -> bool:
     if op1 == op2:
         return False
+    
+    # If either operator is a branch operator, then they can't be fused
+    if type(op1) is BranchPythonOperator or type(op2) is BranchPythonOperator:
+        return False
+    
+    #If either operator has a BranchPythonOperator upstream, then they can't be fused
+    for op in [op1, op2]:
+        queue = deque()
+        queue.append(op)
+        while queue:
+            current_op = queue.popleft()
+            if type(current_op) is BranchPythonOperator:
+                return False
+            for upstream_op in current_op.upstream_list:
+                queue.append(upstream_op)
+            
+    
+
     if type(op1) is ParallelFusedPythonOperator and type(op2) is not ParallelFusedPythonOperator:
         return False
     if type(op1) is not ParallelFusedPythonOperator and type(op2) is ParallelFusedPythonOperator:

@@ -9,18 +9,31 @@ from airflowfusion.operator import ParallelFusedPythonOperator
 
 # Declare a dag with two python tasks that just print something
 
-@task
-def print_hello():
-    print("Hello World")
 
-@task
 def print_goodbye():
     print("Goodbye World")
 
 with DAG("test_dag", schedule_interval=None, start_date=None) as dag:
-    print_hello() >> print_goodbye()
 
-    x = ParallelFusedPythonOperator(task_id="fused", dag=dag)
+    t1 = PythonOperator(
+        task_id="print_hello",
+        python_callable=print_goodbye,
+        dag=dag,
+        provide_context=True,
+    )
+
+    t2 = PythonOperator(
+        task_id="print_goodbye",
+        python_callable=print_goodbye,
+        dag=dag,
+        provide_context=True,
+    )
+
+    t1 >> t2
+
+    print(t2.upstream_list)
+
+    
 
     #fused_dag = create_optimized_dag(dag)
 

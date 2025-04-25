@@ -16,12 +16,12 @@ def sender_task_function(**context):
     # of the task instance (ti) in the Airflow context
     write('xcom', 'my_number', 23)
     
-    write('xcom', 'return_value', "Avery")
+    write('xcom', 'return', "Avery")
 
 
 def receiver_task_function(**context):
     # pull values from XCom explicitly with a specific key by using the .xcom_pull method
-    xcom_received = read('xcom', 'return_value')
+    xcom_received = read('xcom', 'return')
     my_number = read('xcom', 'my_number')
 
     print(xcom_received + f" deserves {my_number} treats!")

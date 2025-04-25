@@ -38,30 +38,40 @@ with DAG(
     )
 
     def player_one_draws_cards(**kwargs):
-        shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        #shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        shuffle_response = read('xcom', 'return_value')
         deck_id = json.loads(shuffle_response)["deck_id"]
         cards = draw_cards(deck_id, 2)
-        kwargs['ti'].xcom_push(key="player_one_cards", value=cards)
+        #kwargs['ti'].xcom_push(key="player_one_cards", value=cards)
+        write('xcom', 'player_one_cards', cards)
 
     def player_two_draws_cards(**kwargs):
-        shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        #shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        shuffle_response = read('xcom', 'return_value')
         deck_id = json.loads(shuffle_response)["deck_id"]
         cards = draw_cards(deck_id, 2)
-        kwargs['ti'].xcom_push(key="player_two_cards", value=cards)
+        #kwargs['ti'].xcom_push(key="player_two_cards", value=cards)
+        write('xcom', 'player_two_cards', cards)
 
     def cards_on_the_table(**kwargs):
-        shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        #shuffle_response = kwargs['ti'].xcom_pull(task_ids='shuffle_cards')
+        shuffle_response = read('xcom', 'return_value')
         deck_id = json.loads(shuffle_response)["deck_id"]
         cards = draw_cards(deck_id, 5)
-        kwargs['ti'].xcom_push(key="cards_on_the_table", value=cards)
+        #kwargs['ti'].xcom_push(key="cards_on_the_table", value=cards)
+        write('xcom', 'cards_on_the_table', cards)
 
     def evaluate_cards(**kwargs):
         ti = kwargs['ti']
 
         # Pull data from XCom
-        player_one_cards = ti.xcom_pull(task_ids='player_one_draws_cards', key='player_one_cards')
-        player_two_cards = ti.xcom_pull(task_ids='player_two_draws_cards', key='player_two_cards')
-        cards_on_the_table = ti.xcom_pull(task_ids='cards_on_the_table', key='cards_on_the_table')
+        #player_one_cards = ti.xcom_pull(task_ids='player_one_draws_cards', key='player_one_cards')
+        #player_two_cards = ti.xcom_pull(task_ids='player_two_draws_cards', key='player_two_cards')
+        #cards_on_the_table = ti.xcom_pull(task_ids='cards_on_the_table', key='cards_on_the_table')
+
+        player_one_cards = read('xcom', 'player_one_cards')
+        player_two_cards = read('xcom', 'player_two_cards')
+        cards_on_the_table = read('xcom', 'cards_on_the_table')
 
         for card in player_one_cards:
             print(f"Player 1 drew: {card['value']} of {card['suit']}")

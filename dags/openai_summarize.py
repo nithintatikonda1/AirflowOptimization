@@ -35,6 +35,7 @@ from airflowfusion.backend_registry import read, write
 from airflowfusion.fuse import create_optimized_dag
 
 from airflowfusion.operator import ParallelFusedPythonOperator
+from airflow.operators.python import PythonOperator
 
 OPENAI_CONN_ID = "openai_default"
 
@@ -430,13 +431,16 @@ def FinSum_OpenAI():
     def write_function1(df):
         write('xcom', 'summary', df)
 
-    edgar_docs = task(extract)()
+    #edgar_docs = task(extract)()
+    edgar_docs = PythonOperator(task_id="extract", python_callable=extract)
 
-    split_docs = task(split)()
+    #split_docs = task(split)()
+    split_docs = PythonOperator(task_id="split", python_callable=split)
 
     edgar_docs >> split_docs
 
-    embeddings_file = task(vectorize, task_id="vectorize_chunks")()
+    #embeddings_file = task(vectorize, task_id="vectorize_chunks")()
+    embeddings_file = PythonOperator(task_id="vectorize_chunks", python_callable=vectorize)
 
     split_docs >> embeddings_file
 
@@ -445,9 +449,10 @@ def FinSum_OpenAI():
 
     split_docs >> generate_summary
 
-    summaries_file = task(vectorize2, task_id="vectorize_summaries")()
+    #summaries_file = task(vectorize2, task_id="vectorize_summaries")()
+    summaries_file = PythonOperator(task_id="vectorize_summaries", python_callable=vectorize2)
 
     generate_summary>> summaries_file
 
 dag = FinSum_OpenAI()
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag)

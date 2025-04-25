@@ -33,7 +33,10 @@ class ReadWriteInterceptor:
             try:
                 func_globals["read"] = self.cached_read
                 func_globals["write"] = self.cached_write
-                return func(context)
+                result = func(context)
+                if result != None:
+                    write("xcom", "return_value", result)
+                return result
             finally:
                 func_globals["read"] = original_read
                 func_globals["write"] = original_write

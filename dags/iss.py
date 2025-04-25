@@ -23,6 +23,7 @@ from typing import Any
 import logging
 from airflowfusion.backend_registry import read, write
 from airflowfusion.fuse import create_optimized_dag
+from airflow.operators.python import PythonOperator
 
 task_logger = logging.getLogger("airflow.task")
 
@@ -76,8 +77,7 @@ def find_the_iss():
     )
     
 
-    @task
-    def log_iss_location(location: str) -> dict:
+    def log_iss_location() -> dict:
         """
         This task prints the current location of the International Space Station to the logs.
         Args:
@@ -85,6 +85,7 @@ def find_the_iss():
         Returns:
             dict: The JSON response from the API call to the Reverse Geocode API.
         """
+        location = read("xcom", "return_value")
         import requests
         import json
 
@@ -105,10 +106,16 @@ def find_the_iss():
         )
 
         return r
+    
+    log_iss_loc = PythonOperator(
+        task_id="log_iss_location",
+        python_callable=log_iss_location,
+    )
 
-    log_iss_location_obj = log_iss_location(get_iss_coordinates.output)
 
-    chain(get_iss_coordinates, log_iss_location_obj)
+    #log_iss_location_obj = log_iss_location(get_iss_coordinates.output)
+    get_iss_coordinates >> log_iss_loc
+
 
 
 dag = find_the_iss()

@@ -61,10 +61,11 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     for task in tasks:
         predecessors[task][task] = 0
 
+
     m = gp.Model("model")
 
     # Utility constants
-    M = 1000
+    M = 100000
 
     # Variables
 
@@ -129,11 +130,15 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
                 # 6. Enforce x_ij whcih checks for predecessor relationship within fused component
                 m.addConstr(x[task1][task2] >= f[task1][task2], "xConstr1_" + task1 + "_" + task2)
                 m.addConstr(x[task1][task2] <= f[task1][task2] + gp.quicksum(b[task1][task3][task2] for task3 in tasks if task1 != task3 and task2 != task3), "xConstr3_" + task1 + "_" + task2)
+                if task1 < task2:
+                    m.addConstr(x[task1][task2] + x[task2][task1] <= 1, "xConstrFix_" + task1 + "_" + task2)
 
                 # 8. Enforce predecessor constraints from original workflow.
                 m.addConstr(y[task1][task2] >= f[task1][task2] + e[task1][task2], "yConstr1_" + task1 + "_" + task2)
                 m.addConstr(y[task1][task2] <= f[task1][task2] + e[task1][task2] + gp.quicksum(a[task1][task3][task2] for task3 in tasks if task1 != task3 and task2 != task3), "yConstr3_" + task1 + "_" + task2)
                 m.addConstr(y[task1][task2] >= predecessors[task1][task2], "yConstr4_" + task1 + "_" + task2)
+                if task1 < task2:
+                    m.addConstr(y[task1][task2] + y[task2][task1] <= 1, "yConstrFix_" + task1 + "_" + task2)
 
                 # 12. Set tasks as unfusable
                 if not fusion_possible[task1][task2]:
@@ -196,6 +201,19 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
             if f[from_task][to_task].X >= 0.5:
                 fused_edges.append((from_task, to_task))
 
-    
+    """
+    print('fused edges: ', fused_edges)
+    print('operator edges: ', operator_edges)
 
+    # Print the values of all IP variables having to do with the task ids 'vectorize_summaries' and 'split'
+    print('y[vectorize_summaries][split]: ', y['vectorize_summaries']['split'].X)
+    print('y[split][vectorize_summaries]: ', y['split']['vectorize_summaries'].X)
+
+    print('e[vectorize_summaries][split]: ', e['vectorize_summaries']['split'].X)
+    print('e[split][vectorize_summaries]: ', e['split']['vectorize_summaries'].X)
+
+    print('f[vectorize_summaries][split]: ', f['vectorize_summaries']['split'].X)
+    print('f[split][vectorize_summaries]: ', f['split']['vectorize_summaries'].X)
+    exit(0)
+    """
     return fused_edges, operator_edges
