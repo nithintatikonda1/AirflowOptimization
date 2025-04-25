@@ -25,7 +25,7 @@ class ReadWriteInterceptor:
     def optimize_function(self, func):
         """Wraps a function to use optimized reads/writes."""
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(context):
             func_globals = func.__globals__
             original_read = func_globals.get("read")
             original_write = func_globals.get("write")
@@ -33,20 +33,38 @@ class ReadWriteInterceptor:
             try:
                 func_globals["read"] = self.cached_read
                 func_globals["write"] = self.cached_write
-                return func(*args, **kwargs)
+                return func(context)
             finally:
                 func_globals["read"] = original_read
                 func_globals["write"] = original_write
 
         return wrapper
     
-    def get_pipeline_function(self, functions):
+    def optimize_function_without_context(self, func):
+        @wraps(func)
+        def wrapper():
+            func_globals = func.__globals__
+            original_read = func_globals.get("read")
+            original_write = func_globals.get("write")
+
+            try:
+                func_globals["read"] = self.cached_read
+                func_globals["write"] = self.cached_write
+                return func()
+            finally:
+                func_globals["read"] = original_read
+                func_globals["write"] = original_write
+
+        return wrapper
+    
+    def get_pipeline_function(self, operators):
         """Returns a function that executes a list of functions in sequence with optimized reads/writes."""
 
-        def pipeline_function(*args, **kwargs):
+        def pipeline_function(context):
             print("Executing pipeline function")
-            for func in functions:
-                optimized_func = self.optimize_function(func)
-                optimized_func(*args, **kwargs)
+            for operator in operators:
+                optimized_func = self.optimize_function(operator.execute)
+                optimized_func(context)
 
         return pipeline_function
+    

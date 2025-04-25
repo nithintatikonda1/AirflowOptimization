@@ -1,52 +1,54 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from pprint import pprint
-from airflowfusion.fuse import create_optimized_dag, create_optimized_dag_integer_programming
+from airflowfusion.fuse import create_optimized_dag
+from airflowfusion.backend_registry import read, write
+
+from pathlib import Path
+
+
 
 def dispense50(**kwargs):
     amount = kwargs['amount']
-    ti = kwargs['ti']
-
     number_of_50 = amount // 50
     remainder = amount % 50
 
-    ti.xcom_push(key='number_of_50', value = number_of_50)
-    ti.xcom_push(key='amount1', value = remainder)
+    write('xcom', 'number_of_50', number_of_50)
+    write('xcom', 'amount', remainder)
+    
 
 
 def dispense20(**kwargs):
-    ti = kwargs['ti']
-    amount = ti.xcom_pull(key='amount1')
+    amount = read('xcom', 'amount')
 
     number_of_20 = amount // 20
     remainder = amount % 20
 
-    ti.xcom_push(key='number_of_20', value = number_of_20)
-    ti.xcom_push(key='amount2', value = remainder)
+    write('xcom', 'number_of_20', number_of_20)
+    write('xcom', 'amount', remainder)
 
 def dispense10(**kwargs):
-    ti = kwargs['ti']
-    amount = ti.xcom_pull(key='amount2')
+    amount = read('xcom', 'amount')
 
     number_of_10 = amount // 10
     remainder = amount % 10
 
-    ti.xcom_push(key='number_of_10', value = number_of_10)
-    ti.xcom_push(key='amount3', value = remainder)
+    write('xcom', 'amount', remainder)
+    write('xcom', 'number_of_10', number_of_10)
 
 def dispense1(**kwargs):
-    ti = kwargs['ti']
-    amount = ti.xcom_pull(key='amount3')
+    amount = read('xcom', 'amount')
 
     number_of_1 = amount // 1
     remainder = amount % 1
 
-    ti.xcom_push(key='number_of_1', value = number_of_1)
-    ti.xcom_push(key='amount4', value = remainder)
+    write('xcom', 'amount', remainder)
+    write('xcom', 'number_of_1', number_of_1)
 
 
+dag_id = 'aws_change'
 dag = DAG(
-    dag_id='aws_change',
+    dag_id=dag_id,
     description='Given amount, return number of each denomination',
     schedule_interval=None
 )
@@ -81,27 +83,12 @@ t4 = PythonOperator(
     provide_context=True,
 )
 
+
+
 # Create dependency to ensure run_get_data runs first before process_data
 t1 >> t2 >> t3 >> t4
 
-total_costs = {'dispense50': 2, 'dispense20': 2, 'dispense10': 2, 'dispense1': 2}
 
-read_costs = {'dispense50': {'amount1': 1}, 
-              'dispense20': {'amount2': 1}, 
-              'dispense10': {'amount3': 1}, 
-              'dispense1': {'amount4': 1}
-            }
-read_costs = {'dispense50': {'dispense50': 0, 'dispense20': 0, 'dispense10': 0, 'dispense1': 0}, 
-              'dispense20': {'dispense50': 0, 'dispense20': 0, 'dispense10': 0, 'dispense1': 0}, 
-              'dispense10': {'dispense50': 0, 'dispense20': 0, 'dispense10': 0, 'dispense1': 0}, 
-              'dispense1': {'dispense50': 0, 'dispense20': 0, 'dispense10': 0, 'dispense1': 0}
-            }
-read_costs = {'dispense50': {'amount1': 1}, 
-              'dispense20': {'amount2': 1}, 
-              'dispense10': {'amount3': 1}, 
-              'dispense1': {'amount4': 1}
-            }
-
-#fused_dag = create_optimized_dag_integer_programming(dag, total_costs, read_costs, 1)
+fused_dag = create_optimized_dag(dag, timing=True)
 
 

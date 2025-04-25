@@ -1,11 +1,11 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from pprint import pprint
-from airflowfusion.fuse import create_optimized_dag, create_optimized_dag_integer_programming
+from airflowfusion.fuse import create_optimized_dag
 from airflowfusion.backend_registry import read, write
-from airflowfusion.operator import FusedPythonOperator
 
 from pathlib import Path
+import time
 
 
 
@@ -13,7 +13,9 @@ def dispense50(**kwargs):
     amount = kwargs['amount']
     number_of_50 = amount // 50
     remainder = amount % 50
-
+    print("Sleeping for 100 seconds")
+    time.sleep(100)
+    print("Done sleeping")
     write('xcom', 'number_of_50', number_of_50)
     write('xcom', 'amount', remainder)
     
@@ -55,7 +57,7 @@ dag = DAG(
 )
 
 
-t1 = FusedPythonOperator(
+t1 = PythonOperator(
     task_id="dispense50",
     python_callable=dispense50,
     dag=dag,
@@ -63,21 +65,21 @@ t1 = FusedPythonOperator(
     op_kwargs={'amount': 99}
 )
 
-t2 = FusedPythonOperator(
+t2 = PythonOperator(
     task_id="dispense20",
     python_callable=dispense20,
     dag=dag,
     provide_context=True,
 )
 
-t3 = FusedPythonOperator(
+t3 = PythonOperator(
     task_id="dispense10",
     python_callable=dispense10,
     dag=dag,
     provide_context=True,
 )
 
-t4 = FusedPythonOperator(
+t4 = PythonOperator(
     task_id="dispense1",
     python_callable=dispense1,
     dag=dag,
@@ -90,6 +92,7 @@ t4 = FusedPythonOperator(
 t1 >> t2 >> t3 >> t4
 
 
-#fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)
+#fused_dag = create_optimized_dag(dag)
+
 
 

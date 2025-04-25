@@ -6,7 +6,7 @@ import logging
 import pickle
 import os
 
-def optimize_integer_program(predecessors, fusion_possible, c, t, r, dag_id):
+def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     """
     Takes two task nodes and combines them into one tasknode, reassigning the upstream and downstream tasks
 
@@ -47,7 +47,9 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r, dag_id):
 
     # Starting and ending tasks have execution and read times of 0
     t[dummy_starting_task] = 0
-    t[dummy_ending_task]
+    t[dummy_ending_task] = 0
+    r[dummy_starting_task] = {}
+    r[dummy_ending_task] = {}
     for task in tasks:
         r[task][dummy_ending_task] = 0
         r[task][dummy_starting_task] = 0
@@ -174,6 +176,8 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r, dag_id):
     # Objective
     m.setObjective(d[dummy_starting_task], GRB.MINIMIZE)
 
+    # Set time limit
+    m.setParam(GRB.Param.TimeLimit, 1200)
 
     # Solve 
     m.optimize()

@@ -4,3 +4,17 @@ regex
 gurobipy
 scipy
 boto3
+apache-airflow-providers-openai
+langchain
+apache-airflow-providers-amazon
+astro-sdk-python
+openmeteo_py
+markdown
+xgboost
+scikit-learn
+apache-airflow-providers-google
+google-cloud-bigquery
+lightgbm
+mlflow
+matplotlib
+airflow-provider-great-expectations

@@ -1,0 +1,11 @@
+write extract xcom <df> 0.2053971290588379
+read split xcom <df> 0.05860781669616699
+write split xcom <df> 0.13010454177856445
+read vectorize_chunks xcom <df> 0.09333229064941406
+read summarize_openai xcom <df> 0.10287117958068848
+write summarize_openai xcom <summary> 0.02402186393737793
+read vectorize_summaries xcom <summary> 0.018563508987426758
+read vectorize_summaries xcom <summary> 0.004495143890380859
+read vectorize_summaries xcom <summary> 0.06250476837158203
+read vectorize_summaries xcom <summary> 0.03215336799621582
+read vectorize_summaries xcom <summary> 0.03170609474182129

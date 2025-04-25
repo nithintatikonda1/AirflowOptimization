@@ -1,0 +1,11 @@
+write dispense50 xcom <number_of_50> 0.0038814544677734375
+write dispense50 xcom <amount> 0.0032241344451904297
+read dispense20 xcom <amount> 0.003465890884399414
+write dispense20 xcom <number_of_20> 0.004028797149658203
+write dispense20 xcom <amount> 0.0028219223022460938
+read dispense10 xcom <amount> 0.0032618045806884766
+write dispense10 xcom <amount> 0.004068851470947266
+write dispense10 xcom <number_of_10> 0.0029811859130859375
+read dispense1 xcom <amount> 0.0030236244201660156
+write dispense1 xcom <amount> 0.003622770309448242
+write dispense1 xcom <number_of_1> 0.0027997493743896484

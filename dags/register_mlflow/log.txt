@@ -1,0 +1,6 @@
+write load_data xcom <df> 0.047943830490112305
+read preprocessing xcom <df> 0.02444005012512207
+write preprocessing xcom <df> 0.044297218322753906
+read feature_engineering xcom <df> 0.02342081069946289
+write feature_engineering xcom <df> 0.05897021293640137
+read grid_search_cv xcom <df> 0.026716232299804688

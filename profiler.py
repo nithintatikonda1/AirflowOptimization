@@ -10,7 +10,11 @@ import tarfile
 import io
 
 # ----------- CONFIGURATIONS --------------
-DAGS_TO_RUN = ['stock']  # Replace with your DAG IDs
+DAGS_TO_RUN = ['aws_change', 'bedrock_blog_generator', 'patent_crawler', "simple_redshift_1", "gx_pandas", "find_the_iss", 'FinSum_OpenAI',
+               "push_pull", "register_mlflow", 's3_upload', 's3_upload_copy', 'manatee_sentiment', 'stock', 'telephone_game_1', 'texas_hold_em',
+               'text_processing','ml_pipeline']  # Replace with your DAG IDs
+DAGS_TO_RUN = DAGS_TO_RUN[5:]
+#DAGS_TO_RUN = ['aws_change']
 LOG_FILE_TEMPLATE = "/usr/local/airflow/dags/{}/log.txt"  # Path inside scheduler container
 OUTPUT_DIR = "./include/dag_timings"  # Directory to store parsed results
 
@@ -61,11 +65,11 @@ def initialize_log_file(container, dag_id):
     
     # Run command inside scheduler container
     exit_code, output = container.exec_run(cmd1)
-    time.sleep(2)
+    time.sleep(5)
     exit_code, output = container.exec_run(cmd2)
-    time.sleep(2)
+    time.sleep(5)
     exit_code, output = container.exec_run(cmd3)
-    time.sleep(2)
+    time.sleep(5)
 
     if exit_code != 0:
         raise RuntimeError(f"Failed to initialize log file: {output}")
@@ -108,9 +112,9 @@ def get_task_durations_from_db(dag_id, pg_conn):
     """Fetches total duration of each task from Airflow metadata database."""
     print(f"Querying durations for DAG '{dag_id}'")
     query = """
-        SELECT task_id, SUM(duration) as total_duration
+        SELECT task_id, AVG(duration) as total_duration
         FROM task_instance
-        WHERE dag_id = %s
+        WHERE dag_id = %s AND state = 'success'
         GROUP BY task_id;
     """
     with pg_conn.cursor() as cur:
@@ -137,11 +141,34 @@ def connect_to_postgres(postgres_container):
     conn = psycopg2.connect(**config)
     return conn
 
-def process_dag(dag_id, scheduler_container, pg_conn):
+def process_dag(dag_id, scheduler_container, pg_conn, N=1):
     """Full processing pipeline for a single DAG."""
+    # Initialize log file
     initialize_log_file(scheduler_container, dag_id)
-    trigger_dag(dag_id)
-    time.sleep(20)  # Adjust based on how DAG runs
+
+    # Execute DAG N times
+    for _ in range(N):
+        trigger_dag(dag_id)
+        # Poll Postgres to check if DAG has finished
+        polling_interval = 20
+        elapsed_time = 0
+        while True:
+            time.sleep(polling_interval)
+            elapsed_time += polling_interval
+            with pg_conn.cursor() as cur:
+                cur.execute("SELECT state FROM dag_run WHERE dag_id = %s ORDER BY execution_date DESC LIMIT 1", (dag_id,))
+                state = cur.fetchone()
+            if state and state[0] == "success":
+                print(f"DAG '{dag_id}' succeeded!")
+                break
+            elif state and state[0] == "failed":
+                print(f"DAG '{dag_id}' failed. Skipping to next DAG...")
+                break
+            elif not state:
+                raise RuntimeError(f"Failed to fetch state for DAG '{dag_id}'.")
+            else:
+                print(f"Waiting for DAG '{dag_id}' to finish. Current state: {state[0]} (elapsed time: {elapsed_time} seconds)")
+    
 
     # Fetch and parse timing log
     log_text = fetch_log_file(scheduler_container, dag_id)

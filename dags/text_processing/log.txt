@@ -1,0 +1,7 @@
+write decode xcom <base64_decode> 0.004055023193359375
+read stats xcom <base64_decode> 0.0030257701873779297
+write stats xcom <stats> 0.003765583038330078
+read clean xcom <base64_decode> 0.0031752586364746094
+write clean xcom <cleaned_string> 0.003969430923461914
+read tokenize xcom <cleaned_string> 0.003330707550048828
+write tokenize xcom <word_count_map> 0.0038597583770751953

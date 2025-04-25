@@ -1,0 +1,4 @@
+write get_sentences_from_api xcom <file_path> 0.02321028709411621
+read transform_data xcom <file_path> 0.0032575130462646484
+write transform_data xcom <df> 0.010561466217041016
+read run_sentiment_analysis xcom <df> 0.015252113342285156

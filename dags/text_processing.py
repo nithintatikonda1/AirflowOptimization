@@ -1,10 +1,10 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflowfusion.operator import FusedPythonOperator
-from airflowfusion.fuse import create_optimized_dag_integer_programming
+from airflowfusion.fuse import create_optimized_dag
 from airflowfusion.backend_registry import read, write
 import base64
 import re
+
 
 def base64_decode():
     input = 'eW91ciB0ZXh0'
@@ -45,34 +45,34 @@ def tokenize_count():
 
 
 dag = DAG(
-    dag_id='stock',
-    description='Buy or sell stock',
+    dag_id='text_processing',
+    description='Process text',
     schedule_interval=None
 )
 
 
-t1 = FusedPythonOperator(
+t1 = PythonOperator(
     task_id="decode",
     python_callable=base64_decode,
     dag=dag,
     provide_context=True,
 )
 
-t2 = FusedPythonOperator(
+t2 = PythonOperator(
     task_id="stats",
     python_callable=generate_stats,
     dag=dag,
     provide_context=True,
 )
 
-t3 = FusedPythonOperator(
+t3 = PythonOperator(
     task_id="clean",
     python_callable=string_clean,
     dag=dag,
     provide_context=True,
 )
 
-t4 = FusedPythonOperator(
+t4 = PythonOperator(
     task_id="tokenize",
     python_callable=tokenize_count,
     dag=dag,
@@ -83,3 +83,4 @@ t4 = FusedPythonOperator(
 t1 >> t2 >> t3 >> t4
 
 #fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)
+fused_dag = create_optimized_dag(dag, timing=True)

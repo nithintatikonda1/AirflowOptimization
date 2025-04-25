@@ -1,0 +1,5 @@
+write checkPrice xcom <checkPrice> 0.0034368038177490234
+read buy_sell_recommendation xcom <checkPrice> 0.003039836883544922
+write buy_sell_recommendation xcom <buy_sell_recommendation> 0.0038766860961914062
+read buy_or_sell xcom <buy_sell_recommendation> 0.004122257232666016
+read buy xcom <checkPrice> 0.003111600875854492

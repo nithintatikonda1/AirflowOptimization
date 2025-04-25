@@ -10,3 +10,4 @@ webserver_config.py
 airflow.cfg
 airflow.db
 include/gurobi.lic
+include/psychic-rhythm-457506-g6-0446a6ac2179.json

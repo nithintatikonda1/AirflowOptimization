@@ -1,0 +1,11 @@
+write upstream xcom <word> 0.003907918930053711
+read misunderstand_task1 xcom <word> 0.0031697750091552734
+write misunderstand_task1 xcom <word> 0.004046440124511719
+read misunderstand_task2 xcom <word> 0.003055572509765625
+write misunderstand_task2 xcom <word> 0.003634214401245117
+read misunderstand_task3 xcom <word> 0.003234386444091797
+write misunderstand_task3 xcom <word> 0.004078388214111328
+read misunderstand_task4 xcom <word> 0.0029914379119873047
+write misunderstand_task4 xcom <word> 0.0037696361541748047
+read downstream xcom <word> 0.003027200698852539
+write downstream xcom <result> 0.003763914108276367

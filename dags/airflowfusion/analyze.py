@@ -1,39 +1,66 @@
 from airflowfusion.task import TaskGraph
 from airflow.operators.python import PythonOperator
-from airflowfusion.util import get_function_definition_lines
-from airflowfusion.util import PULL_PATTERN, PUSH_PATTERN
+from airflow.models.baseoperator import BaseOperator
+from airflowfusion.operator import ParallelFusedPythonOperator
+from airflowfusion.optimize import optimize_integer_program
+from airflow import DAG
 import regex as re
 from collections import defaultdict
 from pprint import pprint
 
-def create_read_costs_matrix(task_graph: TaskGraph, read_write_costs_per_task):
-    if task_graph.fusion_performed:
-        raise Exception("Fusion already performed")
+def is_fusable(op1: BaseOperator, op2: BaseOperator) -> bool:
+    if op1 == op2:
+        return False
+    if type(op1) is ParallelFusedPythonOperator and type(op2) is not ParallelFusedPythonOperator:
+        return False
+    if type(op1) is not ParallelFusedPythonOperator and type(op2) is ParallelFusedPythonOperator:
+        return False
+    if type(op1) is ParallelFusedPythonOperator and type(op2) is ParallelFusedPythonOperator and op1.sharding_function != op2.sharding_function:
+        return False
+    
+    return True
 
-    """
-    task_id_to_read, read_to_task_ids, task_id_to_write, write_to_task_ids = analyze_task_graph(task_graph)
+def create_fusion_possible_matrix(dag: DAG):
+    fusion_possible = defaultdict(lambda: defaultdict(int))
 
+    tasks = list(dag.task_dict.values())
+    for op1 in tasks:
+        for op2 in tasks:
+            task1_id = op1.task_id
+            task2_id = op2.task_id
+            if is_fusable(op1, op2):
+                fusion_possible[task1_id][task2_id] = 1
+
+    return fusion_possible
+
+def create_predecessor_matrix(dag: DAG):
+        predecessors = defaultdict(lambda: defaultdict(int))
+
+        def dfs(op, onPath):
+            task_id = op.task_id 
+            for predecessor_task_id in onPath:
+                predecessors[predecessor_task_id][task_id] = 1
+
+            onPath.append(task_id)
+            for downstream_op in op.downstream_list:
+                dfs(downstream_op, onPath)
+
+            onPath.pop()
+
+        operators = dag.task_dict.values()
+        for op in operators:
+            predecessors[op.task_id][op.task_id] = 0
+            dfs(op, [])
+
+        return predecessors
+
+def create_read_costs_matrix(dag, read_write_costs_per_task):
+
+    task_ids = list(dag.task_dict.keys())
     read_costs = {}
-    for task in task_graph.tasks:
-        task_id1 = task.operators[0].task_id
+    for task_id1 in task_ids:
         read_costs[task_id1] = {}
-        for task2 in task_graph.tasks:
-            task_id2 = task2.operators[0].task_id
-            read_costs[task_id1][task_id2] = 0
-
-            for read in task_id_to_read[task_id2]:
-                if read in task_id_to_write[task_id1] or read in task_id_to_read[task_id1]:
-                    if task_id1 in read_costs_per_task:
-                        read_costs[task_id1][task_id2] = max(read_costs_per_task[task_id1].get(read, 0), read_costs[task_id1][task_id2])
-
-    return read_costs"
-    """
-    read_costs = {}
-    for task in task_graph.tasks:
-        task_id1 = task.operators[0].task_id
-        read_costs[task_id1] = {}
-        for task2 in task_graph.tasks:
-            task_id2 = task2.operators[0].task_id
+        for task_id2 in task_ids:
             read_costs[task_id1][task_id2] = 0
 
             task1_reads_writes = set()
@@ -45,41 +72,3 @@ def create_read_costs_matrix(task_graph: TaskGraph, read_write_costs_per_task):
                     read_costs[task_id1][task_id2] += read_write_costs_per_task[task_id2][(backend, key, read_write)]
 
     return read_costs
-                    
-
-    
-
-def analyze_task_graph(task_graph: TaskGraph):
-    if task_graph.fusion_performed:
-        raise Exception("Fusion already performed")
-    
-    # Find the reads/writes per tasks
-    task_id_to_read = {}
-    read_to_task_ids = defaultdict(set)
-    task_id_to_write = {}
-    write_to_task_ids = defaultdict(set)
-    for task in task_graph.tasks:
-        operator = task.operators[0]
-        task_id = operator.task_id
-        task_id_to_read[task_id] = set()
-        task_id_to_write[task_id] = set()
-        if isinstance(operator, PythonOperator):
-            lines = get_function_definition_lines(operator.python_callable)
-            for line in lines:
-                pull_search = re.search(PULL_PATTERN, line)
-                push_search = re.search(PUSH_PATTERN, line)
-                key = None
-                if pull_search:
-                    key = pull_search.group(1)
-                    task_id_to_read[task_id].add(key)
-                    read_to_task_ids[key].add(task_id)
-                elif push_search:
-                    key = push_search.group(1)
-                    task_id_to_write[task_id].add(key)
-                    write_to_task_ids[key].add(task_id)
-
-    return task_id_to_read, read_to_task_ids, task_id_to_write, write_to_task_ids
-
-                
-
-

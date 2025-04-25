@@ -1,21 +1,20 @@
 from airflow.operators.python import PythonOperator
 from airflowfusion.read_write_interceptor import ReadWriteInterceptor
+from airflow.models.baseoperator import BaseOperator
 
-class FusedPythonOperator(PythonOperator):
-    def __init__(self, *args, **kwargs):
-        self.failure_rate = kwargs.get('failure_rate', 0)
-        super().__init__(*args, **kwargs)
+class FusedPythonOperator(BaseOperator):
+    def __init__(self, execute_function, **kwargs):
+        super().__init__(**kwargs)
+        self.execute_function = execute_function
 
-class ParallelFusedPythonOperator(PythonOperator):
-    def __init__(self, *args, **kwargs):
-        data_collection_function = kwargs.get('data_collection_function', None)
-        sharding_function = kwargs.get('sharding_function', None)
-        compute_function = kwargs.get('compute_function', None)
-        merge_function = kwargs.get('merge_function', None)
-        write_function = kwargs.get('write_function', None)
-        kwargs['python_callable'] = lambda : write_function(compute_function(data_collection_function()))
+    def execute(self, context):
+        return self.execute_function(context)
 
-        super().__init__(*args, **kwargs)
+
+
+class ParallelFusedPythonOperator(BaseOperator):
+    def __init__(self, data_collection_function, sharding_function, compute_function, merge_function, write_function, **kwargs):
+        super().__init__(**kwargs)
 
         self.data_collection_function = data_collection_function
         self.sharding_function = sharding_function
@@ -24,5 +23,6 @@ class ParallelFusedPythonOperator(PythonOperator):
         self.write_function = write_function
 
 
-        
+    def execute(self, context):
+        return self.write_function(self.compute_function(self.data_collection_function()))
 

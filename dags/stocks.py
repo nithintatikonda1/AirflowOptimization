@@ -1,9 +1,8 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflowfusion.operator import FusedPythonOperator
 from airflow.operators.python import BranchPythonOperator
 from pprint import pprint
-from airflowfusion.fuse import create_optimized_dag_integer_programming
+from airflowfusion.fuse import create_optimized_dag
 from airflowfusion.backend_registry import read, write
 
 def checkPrice(**kwargs):
@@ -105,21 +104,21 @@ dag = DAG(
 )
 
 
-t1 = FusedPythonOperator(
+t1 = PythonOperator(
     task_id="checkPrice",
     python_callable=checkPrice,
     dag=dag,
     provide_context=True,
 )
 
-t2 = FusedPythonOperator(
+t2 = PythonOperator(
     task_id="buy_sell_recommendation",
     python_callable=buy_sell_recommendation,
     dag=dag,
     provide_context=True,
 )
 
-t3 = FusedPythonOperator(
+t3 = PythonOperator(
     task_id="human_approval",
     python_callable=human_approval,
     dag=dag,
@@ -131,14 +130,14 @@ branching = BranchPythonOperator(
     python_callable=buy_or_sell,
 )
 
-t4 = FusedPythonOperator(
+t4 = PythonOperator(
     task_id="buy",
     python_callable=buy,
     dag=dag,
     provide_context=True,
 )
 
-t5 = FusedPythonOperator(
+t5 = PythonOperator(
     task_id="sell",
     python_callable=sell,
     dag=dag,
@@ -149,4 +148,4 @@ t1 >> t2 >> t3 >> branching
 branching >> t4
 branching >> t5
 
-fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)
+fused_dag = create_optimized_dag(dag, timing=True)

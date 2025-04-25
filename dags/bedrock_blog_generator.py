@@ -1,7 +1,7 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflowfusion.operator import FusedPythonOperator
-from airflowfusion.fuse import create_optimized_dag_integer_programming
+from airflowfusion.fuse import create_optimized_dag
 from airflowfusion.backend_registry import read, write
 import base64
 import re
@@ -13,46 +13,49 @@ import zipfile
 import io
 from markdown import markdown
 from botocore.exceptions import ClientError
+import openai
 
 s3_bucket = os.environ.get("S3_BUCKET")
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+api_key = os.environ.get("OPENAI_API_KEY")
+aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')  # Set environment variables for credentials
+aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY') 
 
 def generate_blog_with_bedrock():
     input_text = "Website about dogs."
-    s3 = boto3.client('s3')
-    bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
-
-    # Format the prompt
+    s3 = boto3.client('s3', aws_access_key_id=aws_access_key,aws_secret_access_key=aws_secret_key)
     prompt = (
-        f"{input_text} Include a title, an introduction section, sub sections "
-        "and a conclusion section, and output in Markdown. Respond in <response> XML tag."
-    )
-    body = {
-        "prompt": f"Human: \n\nHuman: {prompt}\n\n\nAssistant:",
-        "max_tokens_to_sample": 600,
-        "temperature": 1,
-        "top_k": 250,
-        "top_p": 0.999,
-        "stop_sequences": ["\n\nHuman:"],
-        "anthropic_version": "bedrock-2023-05-31"
-    }
-
-    # Send prompt to Claude via Bedrock
-    response = bedrock.invoke_model(
-        modelId="anthropic.claude-v2",
-        contentType="application/json",
-        accept="*/*",
-        body=json.dumps(body)
+    f"{input_text} Include a title, an introduction section, sub sections "
+    "and a conclusion section, and output in Markdown. Respond in <response> XML tag."
+)
+    # Send prompt to OpenAI model (e.g., GPT-4)
+    client = openai.OpenAI(api_key=api_key)
+    completion = client.chat.completions.create(
+        model="gpt-4",  # You can use "gpt-3.5-turbo" for GPT-3.5 if preferred
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=600,
+        temperature=1,
+        top_p=0.999,
+        stop=["\n\nHuman:"],
     )
 
-    # Parse output
-    body_bytes = response['body'].read()
-    completion = json.loads(body_bytes.decode('utf-8'))['completion']
+    # Extract and print the response from OpenAI
+    completion = completion.choices[0].message.content
+    print(completion)
 
     # Extract markdown content from Claude's response
     try:
-        md_text = completion.split('<response>\n\n')[1].split('\n\n</response>')[0]
+        md_text = completion.split('<response>\n')[1].split('\n</response>')[0]
     except IndexError:
         raise ValueError("Claude response did not contain valid <response> tags.")
+    
+    if md_text[0] == '\n':
+        md_text = md_text[1:]
+    if md_text[-1] == '\n':
+        md_text = md_text[:-1]
 
     # Save to S3
     s3_key = 'GEN-CONTENT/blog-text.md'
@@ -60,9 +63,15 @@ def generate_blog_with_bedrock():
 
     # Extract intro text
     if '## Introduction' in md_text:
-        get_intro = md_text.split('## Introduction\n\n')[1].split('\n\n##')[0]
+        print(md_text)
+        get_intro = md_text.split('## Introduction\n')[1].split('\n##')[0]
     else:
         get_intro = md_text.split('\n\n')[1]
+
+    if get_intro[0] == '\n':
+        get_intro = get_intro[1:]
+    if get_intro[-1] == '\n':
+        get_intro = get_intro[:-1]
 
     write('xcom', 'intro', get_intro)
     write('xcom', 'textLocation', s3_key)
@@ -75,36 +84,33 @@ def generate_image_from_intro():
         raise ValueError("S3_BUCKET must be provided either via argument or environment variable")
 
     # Set up clients
-    bedrock = boto3.client('bedrock-runtime', region_name='us-west-2')
-    s3 = boto3.client('s3')
+    openai.api_key = os.getenv("OPENAI_API_KEY")  # Set your OpenAI API key (ensure it's stored securely)
+    s3 = boto3.client('s3', aws_access_key_id=aws_access_key,aws_secret_access_key=aws_secret_key)
 
     # Build the prompt and request body
+    client = openai.OpenAI(api_key=api_key)
     prompt = intro
-    request_body = {
-        "text_prompts": [{"text": prompt}],
-        "cfg_scale": 10,
-        "seed": 0,
-        "steps": 50
-    }
 
-    # Call the Stable Diffusion model on Bedrock
-    response = bedrock.invoke_model(
-        modelId="stability.stable-diffusion-xl-v0",
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps(request_body)
+    # Call OpenAI's DALL·E to generate an image from the prompt
+    response = client.images.generate(
+        prompt=prompt,
+        n=1,  # Number of images to generate
+        size="1024x1024",  # Size of the generated image
+        response_format="url"  # Get the image URL
     )
 
-    # Decode and extract image
-    body_bytes = response['body'].read()
-    output = json.loads(body_bytes.decode("utf-8"))
-    base64_img = output["artifacts"][0]["base64"]
-    image_bytes = base64.b64decode(base64_img)
+    # Extract the image URL from the response
+    image_url = response.data[0].url
+
+    # Download the image from the URL
+    import requests
+    image_data = requests.get(image_url).content
 
     # Upload to S3
     image_key = "GEN-CONTENT/image.png"
-    s3.put_object(Bucket=s3_bucket, Key=image_key, Body=image_bytes)
+    s3.put_object(Bucket=s3_bucket, Key=image_key, Body=image_data)
 
+    # Write the result back to XCom
     write('xcom', 'imageLocation', image_key)
     write('xcom', 'textLocation', text_location)
 
@@ -154,27 +160,27 @@ def package_blog_and_image():
 
 
 dag = DAG(
-    dag_id='stock',
-    description='Buy or sell stock',
+    dag_id='bedrock_blog_generator',
+    description='bedrock',
     schedule_interval=None
 )
 
 
-t1 = FusedPythonOperator(
+t1 = PythonOperator(
     task_id="gen_block",
     python_callable=generate_blog_with_bedrock,
     dag=dag,
     provide_context=True,
 )
 
-t2 = FusedPythonOperator(
+t2 = PythonOperator(
     task_id="gen_image",
     python_callable=generate_image_from_intro,
     dag=dag,
     provide_context=True,
 )
 
-t3 = FusedPythonOperator(
+t3 = PythonOperator(
     task_id="package",
     python_callable=package_blog_and_image,
     dag=dag,
@@ -186,3 +192,4 @@ t3 = FusedPythonOperator(
 t1 >> t2 >> t3
 
 #fused_dag = create_optimized_dag_integer_programming(dag, None, None, 1)
+fused_dag = create_optimized_dag(dag, timing=True)

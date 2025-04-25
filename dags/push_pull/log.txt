@@ -1,0 +1,4 @@
+write sender_task xcom <my_number> 0.003970623016357422
+write sender_task xcom <return_value> 0.003261566162109375
+read receiver_task xcom <return_value> 0.0030624866485595703
+read receiver_task xcom <my_number> 0.002190828323364258

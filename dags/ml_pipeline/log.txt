@@ -1,0 +1,17 @@
+write collect_weather_data s3 <airflow_train.csv> 0.8043198585510254
+read preprocess_data s3 <airflow_train.csv> 0.8944990634918213
+write preprocess_data s3 <processed_airflow_train.csv> 0.44005656242370605
+read train_model_on_new_data s3 <processed_airflow_train.csv> 0.593853235244751
+write train_model_on_new_data s3 <model.pkl> 1.0169041156768799
+read make_predictions_on_processed_data s3 <processed_airflow_train.csv> 0.31597375869750977
+write make_predictions_on_processed_data s3 <predictions.json> 0.18048763275146484
+write collect_weather_data s3 <airflow_train.csv> 0.8516504764556885
+write collect_weather_data s3 <airflow_train.csv> 0.8337507247924805
+read preprocess_data s3 <airflow_train.csv> 0.522937536239624
+write collect_weather_data s3 <airflow_train.csv> 0.8318219184875488
+read preprocess_data s3 <airflow_train.csv> 0.5135900974273682
+write preprocess_data s3 <processed_airflow_train.csv> 1.56905198097229
+read train_model_on_new_data s3 <processed_airflow_train.csv> 0.5188682079315186
+write train_model_on_new_data s3 <model.pkl> 1.595337152481079
+read make_predictions_on_processed_data s3 <processed_airflow_train.csv> 0.26689934730529785
+write make_predictions_on_processed_data s3 <predictions.json> 0.31092071533203125
