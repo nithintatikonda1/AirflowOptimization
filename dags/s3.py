@@ -56,14 +56,14 @@ default_args = {
 with DAG(dag_id='s3_upload',
          start_date=datetime(2019, 1, 1),
          max_active_runs=1,
-         schedule_interval='0 12 8-14,22-28 * 6',  # https://airflow.apache.org/docs/stable/scheduler.html#dag-runs
+         #schedule_interval='0 12 8-14,22-28 * 6',  # https://airflow.apache.org/docs/stable/scheduler.html#dag-runs
          default_args=default_args,
          catchup=False # enable if you don't want historical dag runs to run
          ) as dag:
 
     t0 = DummyOperator(task_id='start')
 
-    for i in range(0,5): # generates 10 tasks
+    for i in range(0,10): # generates 10 tasks
         generate_files=PythonOperator(
             task_id='generate_file_{0}_{1}'.format(name, i), # task id is generated dynamically
             python_callable=upload_to_s3,

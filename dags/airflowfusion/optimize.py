@@ -5,6 +5,7 @@ from pprint import pprint
 import logging
 import pickle
 import os
+import time
 
 def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     """
@@ -20,7 +21,7 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     Returns:
         TaskNode: The newly created fused Task Node
     """    
-
+    start_time = time.time()
     tasks = list(predecessors.keys())
     predecessors = predecessors.copy()
     fusion_possible = fusion_possible.copy()
@@ -216,4 +217,5 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     print('f[split][vectorize_summaries]: ', f['split']['vectorize_summaries'].X)
     exit(0)
     """
+    print("elapsed time: ", time.time() - start_time)
     return fused_edges, operator_edges

@@ -283,11 +283,9 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
     # Create data matrices
     for task in task_ids:
         if task not in total_costs:
-            total_costs[task] = 1000
+            total_costs[task] = 0
         elif total_costs[task] == None:
             total_costs[task] = 0
-        elif task == 'vectorize_summaries':
-            total_costs[task] = 1000
 
     read_costs = create_read_costs_matrix(dag, read_write_costs)
     predecesors = create_predecessor_matrix(dag)

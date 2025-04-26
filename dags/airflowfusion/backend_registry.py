@@ -14,6 +14,8 @@ def read(backend_name, key, *args, **kwargs):
         result = xcom_read(key, *args, **kwargs)
     elif backend_name == "s3":
         result = s3_read(key, args[0], args[1], **kwargs)
+    elif backend_name == "custom":
+        result = kwargs['custom_read']()
 
     duration = time.time() - start_time
     print(f"Read from {backend_name} with key {key} in {duration} seconds")
@@ -38,6 +40,8 @@ def write(backend_name, key, value, *args, **kwargs):
         xcom_write(key, value, *args, **kwargs)
     elif backend_name == "s3":
         s3_write(key, value, args[0], args[1], **kwargs)
+    elif backend_name == "custom":
+        kwargs['custom_write'](value)
     duration = time.time() - start_time
     print(f"Write to {backend_name} with key {key} in {duration} seconds")
     context = get_current_context()  # Retrieve the execution context
