@@ -307,6 +307,7 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
         logging.info("IP complete in %.2f seconds", elapsed_time)
 
         # Write the dag id and elapsed time to a file with the formate: dag_id, elapsed_time
+        timing = False
         if timing:
             with open(f"./include/optimization_time.txt", "a") as f:
                 f.write(f"{dag_id}, {elapsed_time}\n")

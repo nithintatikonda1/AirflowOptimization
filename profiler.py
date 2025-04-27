@@ -12,9 +12,9 @@ import io
 # ----------- CONFIGURATIONS --------------
 DAGS_TO_RUN = ['aws_change', 'bedrock_blog_generator', 'patent_crawler', "simple_redshift_1", "gx_pandas", "find_the_iss", 'FinSum_OpenAI',
                "push_pull", "register_mlflow", 's3_upload', 's3_upload_copy', 'manatee_sentiment', 'stock', 'telephone_game_1', 'texas_hold_em',
-               'text_processing','ml_pipeline']  # Replace with your DAG IDs
-DAGS_TO_RUN = DAGS_TO_RUN[5:]
-#DAGS_TO_RUN = ['aws_change']
+               'text_processing','ml_pipeline'] 
+#DAGS_TO_RUN = DAGS_TO_RUN[5:]
+DAGS_TO_RUN = ['s3_upload']
 LOG_FILE_TEMPLATE = "/usr/local/airflow/dags/{}/log.txt"  # Path inside scheduler container
 OUTPUT_DIR = "./include/dag_timings"  # Directory to store parsed results
 
@@ -23,7 +23,7 @@ POSTGRES_CONFIG = {
     'dbname': 'postgres',
     'user': 'postgres',
     'password': 'postgres',
-    'host': 'localhost',  # will be updated dynamically to point to container IP
+    'host': 'localhost',
     'port': 5432,
 }
 
