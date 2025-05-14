@@ -148,4 +148,5 @@ t1 >> t2 >> t3 >> branching
 branching >> t4
 branching >> t5
 
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)

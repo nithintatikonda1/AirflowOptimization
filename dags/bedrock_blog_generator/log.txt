@@ -1,0 +1,16 @@
+read gen_image xcom <intro> 0.007283210754394531
+read gen_image xcom <textLocation> 0.008112430572509766
+read package xcom <textLocation> 0.01055002212524414
+read package xcom <imageLocation> 0.007970333099365234
+read gen_image xcom <intro> 0.009841680526733398
+read gen_image xcom <textLocation> 0.008800029754638672
+read package xcom <textLocation> 0.00964045524597168
+read package xcom <imageLocation> 0.007798910140991211
+read gen_image xcom <intro> 0.011532068252563477
+read gen_image xcom <textLocation> 0.006889820098876953
+read package xcom <textLocation> 0.008750677108764648
+read package xcom <imageLocation> 0.006876707077026367
+read gen_image xcom <intro> 0.009568929672241211
+read gen_image xcom <textLocation> 0.006970643997192383
+read package xcom <textLocation> 0.008862733840942383
+read package xcom <imageLocation> 0.007724285125732422

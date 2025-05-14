@@ -85,4 +85,5 @@ with DAG(
     # Set task dependencies
     upstream_task >> t1 >> t2 >> t3 >> t4 >> downstream_task
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

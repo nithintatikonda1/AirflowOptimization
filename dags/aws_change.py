@@ -89,6 +89,7 @@ t4 = PythonOperator(
 t1 >> t2 >> t3 >> t4
 
 
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)
 
 

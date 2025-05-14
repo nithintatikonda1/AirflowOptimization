@@ -14,6 +14,9 @@ By using an external XCom backend, users can easily push and pull all intermedia
 """
 
 from airflow.decorators import task, dag
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflowfusion.operator import ParallelFusedPythonOperator
 
 from datetime import datetime
 
@@ -27,19 +30,12 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from airflowfusion.backend_registry import read, write
 from google.cloud import bigquery
 import metrics as metrics
+import numpy as np
 from airflowfusion.fuse import create_optimized_dag
 
 
-@dag(
-    start_date=datetime(2021, 1, 1),
-    dag_id="register_mlflow",
-    schedule_interval=None,
-    catchup=False,
-    doc_md=__doc__
-)
-def mlflow_example():
+with DAG("register_mlflow", schedule_interval=None, start_date=None) as dag:
 
-    @task
     def load_data():
         """Pull Census data from Public BigQuery and save as Pandas dataframe in GCS bucket with XCom"""
 
@@ -57,7 +53,6 @@ def mlflow_example():
         write('xcom', 'df', df)
 
 
-    @task
     def preprocessing():
         """Clean Data and prepare for feature engineering
         
@@ -87,8 +82,42 @@ def mlflow_example():
         #return df
         write('xcom', 'df', df)
 
+    def read_function():
+        df = read('xcom', 'df')
+        return df
+    
+    def sharding_function(sharding_num, df):
+        chunks = np.array_split(df, sharding_num)
+        return chunks
 
-    @task
+    def compute_function(df):
+        df.dropna(inplace=True)
+        df.drop_duplicates(inplace=True)
+
+        # Clean Categorical Variables (strings)
+        cols = df.columns
+        for col in cols:
+            if df.dtypes[col]=='object':
+                df[col] =df[col].apply(lambda x: x.rstrip().lstrip())
+
+        # Rename up '?' values as 'Unknown'
+        df['workclass'] = df['workclass'].apply(lambda x: 'Unknown' if x == '?' else x)
+        df['occupation'] = df['occupation'].apply(lambda x: 'Unknown' if x == '?' else x)
+        df['native_country'] = df['native_country'].apply(lambda x: 'Unknown' if x == '?' else x)
+
+        # Drop Extra/Unused Columns
+        df.drop(columns=['education_num', 'relationship', 'functional_weight'], inplace=True)
+
+        return df
+
+    def merge_function(df_list):
+        df = pd.concat(df_list)
+        return df
+    
+    def write_function(df):
+        write('xcom', 'df', df)
+
+
     def feature_engineering():
         """Feature engineering step
         
@@ -121,7 +150,6 @@ def mlflow_example():
         write('xcom', 'df', df)
 
 
-    @task.python()
     def grid_search_cv(**kwargs):
         """Train and validate model using a grid search for the optimal parameter values and a five fold cross validation.
         
@@ -194,8 +222,41 @@ def mlflow_example():
         #metrics.log_all_eval_metrics(y_test, y_pred_class)
 
 
-    load_data() >> preprocessing() >> feature_engineering() >> grid_search_cv()
+    #load_data() >> preprocessing() >> feature_engineering() >> grid_search_cv()
+    # Create tasks
+    load_data = PythonOperator(
+        task_id='load_data',
+        python_callable=load_data,
+        provide_context=True,
+    )
 
-    
-dag = mlflow_example()
-fused_dag = create_optimized_dag(dag, timing=True)
+    """
+    preprocessing = PythonOperator(
+        task_id='preprocessing',
+        python_callable=preprocessing,
+        provide_context=True,
+    ) """
+    preprocessing = ParallelFusedPythonOperator(
+        task_id='preprocessing',
+        data_collection_function=read_function, sharding_function=sharding_function, compute_function=compute_function, merge_function=merge_function, write_function=write_function,
+        dag=dag
+    )
+
+    feature_engineering = PythonOperator(
+        task_id='feature_engineering',
+        python_callable=feature_engineering,
+        provide_context=True,
+    )
+
+    grid_search_cv = PythonOperator(
+        task_id='grid_search_cv',
+        python_callable=grid_search_cv,
+        provide_context=True,
+    )
+
+    # Create DAG
+    load_data >> preprocessing >> feature_engineering >> grid_search_cv
+
+
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

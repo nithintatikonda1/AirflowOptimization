@@ -31,7 +31,7 @@ with DAG("test_dag", schedule_interval=None, start_date=None) as dag:
 
     t1 >> t2
 
-    print(t2.upstream_list)
+    pprint(t2)
 
     
 

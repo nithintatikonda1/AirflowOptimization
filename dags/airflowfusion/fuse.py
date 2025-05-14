@@ -163,7 +163,7 @@ def compute_fusion(dag: DAG, read_write_costs_per_task: dict, total_costs: dict,
 
 
 
-def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG, total_costs: dict = {}, read_costs: dict = {}, scheduling_cost=0.5, num_workers=8):
+def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG, total_costs: dict = {}, read_costs: dict = {}, scheduling_cost=0.5, num_workers=8, parallelize=True):
     operator_map = {}
     """
     for task in task_graph.tasks:
@@ -201,13 +201,17 @@ def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG, total_costs: dic
                     heappush(queued_tasks, (end_time + scheduling_cost, downstream_task))
 
         while queued_tasks and len(executing_tasks) < num_workers:
-            available_workers = max((num_workers - len(executing_tasks)) // 2, 1)
             _, task = heappop(queued_tasks)
             task_duration = sum(total_costs[operator.task_id] for operator in task.operators)
-            if task.is_parallelizable():
+            available_workers = max((num_workers - len(executing_tasks)) - 1, 1)
+            if task.is_parallelizable() and (2 * scheduling_cost + task_duration / available_workers < task_duration):
+                for o in task.operators:
+                    available_workers = min(available_workers, o.max_parallelism)
                 end_time = latest_end_time + scheduling_cost + task_duration / available_workers
                 for _ in range(available_workers):
                     heappush(executing_tasks, (end_time, task))
+                if not parallelize:
+                    available_workers = 1
                 operator_map[task] = create_operator_from_task(task=task, dag=fused_dag, sharding_num=available_workers)
             else:
                 end_time = latest_end_time + scheduling_cost + task_duration
@@ -226,9 +230,10 @@ def build_dag_from_graph(task_graph: TaskGraph, fused_dag: DAG, total_costs: dic
 
 
 
-def create_optimized_dag(dag: DAG, default_args=None, timing=False) -> DAG:
+def create_optimized_dag(dag: DAG, default_args=None, timing=False, parallelize=True) -> DAG:
     logging.info('Beginning creation of optimized DAG')
-    new_dag = DAG(dag_id=dag._dag_id + '_optimized', default_args=default_args)
+    x = 'fp' if parallelize else 'f'
+    new_dag = DAG(dag_id=dag._dag_id + '_' + x + '_optimized', default_args={})
 
     for key, val in dag.__dict__.items():
         if key == '_dag_id':
@@ -244,15 +249,30 @@ def create_optimized_dag(dag: DAG, default_args=None, timing=False) -> DAG:
         else:
             new_dag.__dict__[key] = val
 
+    scheduling_cost = 1
+    if os.path.exists(f"./include/dag_timings/{dag.dag_id}_scheduling.pkl"):
+        sched = f"./include/dag_timings/{dag.dag_id}_scheduling.pkl"
+        with open(sched, "rb") as f:
+            scheduling_cost = pickle.load(f)[0]
+    elif os.path.exists(f"../include/dag_timings/{dag.dag_id}_scheduling.pkl"):
+        sched = f"../include/dag_timings/{dag.dag_id}_scheduling.pkl"
+        with open(sched, "rb") as f:
+            scheduling_cost = pickle.load(f)[0]
 
-    task_graph, total_costs, read_costs = create_optimized_task_graph(dag, timing)
-    build_dag_from_graph(task_graph, new_dag, total_costs, read_costs)
+
+
+    task_graph, total_costs, read_costs = create_optimized_task_graph(dag, scheduling_cost, timing)
+    if task_graph == None:
+        return None
+    build_dag_from_graph(task_graph, new_dag, total_costs, read_costs, scheduling_cost=scheduling_cost, parallelize=parallelize)
     return new_dag
 
-def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
+def create_optimized_task_graph(dag: DAG, scheduling_cost, timing=False) -> TaskGraph:
     logging.info('Beginning creation of optimized task graph')
     dag_id = dag._dag_id
     task_ids = list(dag.task_dict.keys())
+    # task_ids to operators
+    task_id_to_operator = dag.task_dict
 
     # task durations costs from file. first check ./include then check ../include
     total_costs = None
@@ -261,7 +281,7 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
     elif os.path.exists(f"../include/dag_timings/{dag.dag_id}_task_durations.pkl"):
         total_costs = f"../include/dag_timings/{dag.dag_id}_task_durations.pkl"
     else:
-        raise Exception("Could not find task durations for DAG")
+        return None, None, None
     logging.info("Getting tasks durations from file")
     with open(total_costs, "rb") as f:
         total_costs = pickle.load(f)
@@ -274,7 +294,7 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
     elif os.path.exists(f"../include/dag_timings/{dag.dag_id}_timing_logs.pkl"):
         read_write_costs = f"../include/dag_timings/{dag.dag_id}_timing_logs.pkl"
     else:
-        raise Exception("Could not find read write costs for DAG")
+        return None, None, None
     logging.info("Getting read costs from file")
     with open(read_write_costs, "rb") as f:
         read_write_costs = pickle.load(f)
@@ -286,6 +306,8 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
             total_costs[task] = 0
         elif total_costs[task] == None:
             total_costs[task] = 0
+        if 'failure_rate' in task_id_to_operator[task].params:
+            total_costs[task] = total_costs[task] / (1 - task_id_to_operator[task].params['failure_rate'])
 
     read_costs = create_read_costs_matrix(dag, read_write_costs)
     predecesors = create_predecessor_matrix(dag)
@@ -315,13 +337,10 @@ def create_optimized_task_graph(dag: DAG, timing=False) -> TaskGraph:
         # Serialize
         #CHANGE LOCATION
         logging.info("Serializing IP variables")
-        with open(f"./include/{dag_id}.pkl", "wb") as f:
+        with open(f"./include/{dag_id}.pkl", "wb+") as f:
             pickle.dump((fused_edges, operator_edges), f)
         logging.info("IP variables serialized")
 
-
-    # task_ids to operators
-    task_id_to_operator = dag.task_dict
     
     # Find fused components
     adj_lst = defaultdict(list)

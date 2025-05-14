@@ -96,4 +96,5 @@ with DAG(
 
     begin >> upload_file >> validate_file >> end
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

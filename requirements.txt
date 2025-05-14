@@ -18,3 +18,5 @@ lightgbm
 mlflow
 matplotlib
 airflow-provider-great-expectations
+nltk
+openpyxl

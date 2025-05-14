@@ -50,7 +50,7 @@ def execute_dag_files_in_folder(dag_folder_path):
 
 if __name__ == "__main__":
     # Set the path to the DAG folder
-    dag_folder_path = os.path.join(os.getcwd(), 'dags')  # Adjust if needed
+    dag_folder_path = os.path.join(os.getcwd(), 'dags') 
 
     # Execute all the DAG files
     execute_dag_files_in_folder(dag_folder_path)

@@ -13,7 +13,7 @@ class FusedPythonOperator(BaseOperator):
 
 
 class ParallelFusedPythonOperator(BaseOperator):
-    def __init__(self, data_collection_function, sharding_function, compute_function, merge_function, write_function, **kwargs):
+    def __init__(self, data_collection_function, sharding_function, compute_function, merge_function, write_function, max_parallelism=32, **kwargs):
         super().__init__(**kwargs)
 
         self.data_collection_function = data_collection_function
@@ -21,6 +21,7 @@ class ParallelFusedPythonOperator(BaseOperator):
         self.compute_function = compute_function
         self.merge_function = merge_function
         self.write_function = write_function
+        self.max_parallelism = max_parallelism
 
 
     def execute(self, context):

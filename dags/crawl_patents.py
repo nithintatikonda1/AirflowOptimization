@@ -70,6 +70,7 @@ def crawl(keyword: str):
 
         request_uri = url + '?' + query + query_filter
         json = requests.get(request_uri).json()
+        print(json)
         patent_list = _map_response_to_object(json['patents'], keyword)
         for patent in patent_list:
             patents.append(patent)
@@ -131,4 +132,5 @@ with DAG('patent_crawler', default_args=default_args, catchup=False, schedule_in
     # Use arrows to set dependencies between tasks
     start_task >> [crawl_phone_patents, crawl_software_patents]
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

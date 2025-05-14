@@ -196,6 +196,9 @@ def FinSum_OpenAI():
             
         df = pd.DataFrame(docs)
 
+        print("DF SIZE: ", len(df))
+        print("DF SIZE: ", len(df))
+
         df["content"] = df.docLink.apply(lambda x: get_html_content(doc_link=x))
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
@@ -445,7 +448,7 @@ def FinSum_OpenAI():
     split_docs >> embeddings_file
 
     #generate_summary = task(summarize_openai)()
-    generate_summary = ParallelFusedPythonOperator(task_id='summarize', data_collection_function=read_function1, sharding_function=sharding_function1, compute_function=compute_function1, merge_function=merge_function1, write_function=write_function1)
+    generate_summary = ParallelFusedPythonOperator(task_id='summarize', data_collection_function=read_function1, sharding_function=sharding_function1, compute_function=compute_function1, merge_function=merge_function1, write_function=write_function1, max_parallelism=2)
 
     split_docs >> generate_summary
 
@@ -455,4 +458,5 @@ def FinSum_OpenAI():
     generate_summary>> summaries_file
 
 dag = FinSum_OpenAI()
-fused_dag = create_optimized_dag(dag)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)

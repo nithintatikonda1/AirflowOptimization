@@ -1,3 +1,17 @@
+"""
+## Play Texas Hold'em Poker with Airflow
+
+This DAG will draw cards for two players (and also show how to use a teardown task
+to clean up XComs after the DAG has finished running).
+
+This DAG works with a custom XCom backend and needs:
+
+- the environment variable `XCOM_BACKEND_AWS_CONN_ID` set to `aws_default`
+- a connection to S3 with the connection id `aws_default`
+- the environment variable `XCOM_BACKEND_BUCKET_NAME` set to the name of an S3 bucket.
+- the environment variable `AIRFLOW__CORE__XCOM_BACKEND` set to `include.custom_xcom_backend.s3_xcom_backend.CustomXComBackendS3`
+"""
+
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
@@ -116,4 +130,5 @@ with DAG(
 
     evaluate >> cleanup_xcom
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

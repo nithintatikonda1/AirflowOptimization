@@ -9,6 +9,8 @@ from airflow.operators.python import PythonOperator
 from pendulum import datetime
 from airflowfusion.backend_registry import read, write
 from airflowfusion.fuse import create_optimized_dag
+import random
+from datetime import timedelta
 
 
 def sender_task_function(**context):
@@ -25,6 +27,8 @@ def receiver_task_function(**context):
     my_number = read('xcom', 'my_number')
 
     print(xcom_received + f" deserves {my_number} treats!")
+    if random.random() < :
+        raise ValueError("Random Error")
 
 
 @dag(
@@ -43,10 +47,14 @@ def standard_xcom_traditional():
     receiver_task = PythonOperator(
         task_id="receiver_task",
         python_callable=receiver_task_function,
+        retries=20,
+        retry_delay=timedelta(milliseconds=1),
+        params={'failure_rate': 0}
     )
 
     sender_task >> receiver_task
 
 
 dag = standard_xcom_traditional()
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)

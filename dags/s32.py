@@ -90,4 +90,5 @@ with DAG('s3_upload_copy',
 
         t0 >> generate_files >> copy_files # Make sure this is indented inside the scope of the loop
 
-    fused_dag = create_optimized_dag(dag)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

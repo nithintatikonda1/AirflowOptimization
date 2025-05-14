@@ -22,8 +22,10 @@ def read(backend_name, key, *args, **kwargs):
     context = get_current_context()  # Retrieve the execution context
     task_id = context['task'].task_id  # Get the current task's ID
     dag_id = context['dag'].dag_id
+
+    timing = True
     
-    if not dag_id.endswith("_optimized"):
+    if not dag_id.endswith("_optimized") and timing:
         file_path = LOG_FOLDER  + '/' + dag_id + '/' + LOG_FILE
         output_file = Path(file_path)
         output_file.parent.mkdir(exist_ok=True, parents=True)
@@ -47,7 +49,9 @@ def write(backend_name, key, value, *args, **kwargs):
     context = get_current_context()  # Retrieve the execution context
     task_id = context['task'].task_id  # Get the current task's ID
     dag_id = context['dag'].dag_id
-    if not dag_id.endswith("_optimized"):
+
+    timing = False
+    if not dag_id.endswith("_optimized") and timing:
         file_path = LOG_FOLDER  + '/' + dag_id + '/' + LOG_FILE
         output_file = Path(file_path)
         output_file.parent.mkdir(exist_ok=True, parents=True)

@@ -20,7 +20,7 @@ from airflowfusion.operator import ParallelFusedPythonOperator
 from airflowfusion.fuse import create_optimized_dag
 
 
-def get_weather_data(filename, bucket_name, latitude=14.5995, longitude=120.9842, past_days=20, timezone="Asia/Shanghai"):
+def get_weather_data(filename, bucket_name, latitude=14.5995, longitude=120.9842, past_days=50, timezone="Asia/Shanghai"):
     """
     Retrieves weather data from OpenWeather API and returns a pandas dataframe with relevant columns.
 
@@ -41,6 +41,7 @@ def get_weather_data(filename, bucket_name, latitude=14.5995, longitude=120.9842
 
     # Convert to pandas dataframe
     df = pd.DataFrame(meteo['hourly'])
+    print("Df Size: ", len(df))
 
     # Get only data equal to or less than current time
     current_time = datetime.now().strftime('%Y-%m-%dT%H:%M')
@@ -342,4 +343,5 @@ predict = PythonOperator(
 # Create dependency to ensure run_get_data runs first before process_data
 run_get_data >> process_data >> train >> predict
 
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)

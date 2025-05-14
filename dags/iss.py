@@ -24,6 +24,9 @@ import logging
 from airflowfusion.backend_registry import read, write
 from airflowfusion.fuse import create_optimized_dag
 from airflow.operators.python import PythonOperator
+from airflow.operators.empty import EmptyOperator
+import random
+from datetime import timedelta
 
 task_logger = logging.getLogger("airflow.task")
 
@@ -62,10 +65,11 @@ def commit_message_checker(repo: Any, trigger_message: str) -> bool | None:
 
 @dag(
     start_date=datetime(2023, 6, 1),
-    catchup=False,
     tags=["Connections"],
 )
 def find_the_iss():
+
+    github_sensor = EmptyOperator(task_id="start")
 
 
     get_iss_coordinates = HttpOperator(
@@ -85,6 +89,7 @@ def find_the_iss():
         Returns:
             dict: The JSON response from the API call to the Reverse Geocode API.
         """
+
         location = read("xcom", "return_value")
         import requests
         import json
@@ -110,13 +115,25 @@ def find_the_iss():
     log_iss_loc = PythonOperator(
         task_id="log_iss_location",
         python_callable=log_iss_location,
+        retries = 20,
+        retry_delay = timedelta(
+                    days=0,
+                    seconds=0,
+                    microseconds=1,
+                    milliseconds=0,
+                    minutes=0,
+                    hours=0,
+                    weeks=0
+                ),
+        params = {'failure_rate': 0.6}
     )
 
 
     #log_iss_location_obj = log_iss_location(get_iss_coordinates.output)
-    get_iss_coordinates >> log_iss_loc
+    github_sensor >> get_iss_coordinates >> log_iss_loc
 
 
 
 dag = find_the_iss()
-fused_dag = create_optimized_dag(dag, timing=True)
+fused_dag = create_optimized_dag(dag, parallelize=False)
+optimized_dag = create_optimized_dag(dag)

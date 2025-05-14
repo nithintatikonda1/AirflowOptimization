@@ -14,11 +14,11 @@ DAGS_TO_RUN = ['aws_change', 'bedrock_blog_generator', 'patent_crawler', "simple
                "push_pull", "register_mlflow", 's3_upload', 's3_upload_copy', 'manatee_sentiment', 'stock', 'telephone_game_1', 'texas_hold_em',
                'text_processing','ml_pipeline'] 
 #DAGS_TO_RUN = DAGS_TO_RUN[5:]
-DAGS_TO_RUN = ['s3_upload']
+DAGS_TO_RUN = ['etl_food_pipeline']
 LOG_FILE_TEMPLATE = "/usr/local/airflow/dags/{}/log.txt"  # Path inside scheduler container
 OUTPUT_DIR = "./include/dag_timings"  # Directory to store parsed results
 
-# Postgres connection details
+# default Postgres connection details
 POSTGRES_CONFIG = {
     'dbname': 'postgres',
     'user': 'postgres',
@@ -26,6 +26,13 @@ POSTGRES_CONFIG = {
     'host': 'localhost',
     'port': 5432,
 }
+
+# Load POSTGRES_CONFIG from environment variables
+POSTGRES_CONFIG['dbname'] = os.environ.get('POSTGRES_DB', POSTGRES_CONFIG['dbname'])
+POSTGRES_CONFIG['user'] = os.environ.get('POSTGRES_USER', POSTGRES_CONFIG['user'])
+POSTGRES_CONFIG['password'] = os.environ.get('POSTGRES_PASSWORD', POSTGRES_CONFIG['password'])
+POSTGRES_CONFIG['host'] = os.environ.get('POSTGRES_HOST', POSTGRES_CONFIG['host'])
+POSTGRES_CONFIG['port'] = os.environ.get('POSTGRES_PORT', POSTGRES_CONFIG['port'])
 
 # ----------- FUNCTION DEFINITIONS -------------
 
@@ -141,7 +148,7 @@ def connect_to_postgres(postgres_container):
     conn = psycopg2.connect(**config)
     return conn
 
-def process_dag(dag_id, scheduler_container, pg_conn, N=1):
+def process_dag(dag_id, scheduler_container, pg_conn, N=20):
     """Full processing pipeline for a single DAG."""
     # Initialize log file
     initialize_log_file(scheduler_container, dag_id)

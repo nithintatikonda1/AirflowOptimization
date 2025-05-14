@@ -34,7 +34,7 @@ class ReadWriteInterceptor:
                 func_globals["read"] = self.cached_read
                 func_globals["write"] = self.cached_write
                 result = func(context)
-                if result != None:
+                if not (result is None):
                     write("xcom", "return_value", result)
                 return result
             finally:
@@ -66,8 +66,17 @@ class ReadWriteInterceptor:
         def pipeline_function(context):
             print("Executing pipeline function")
             for operator in operators:
-                optimized_func = self.optimize_function(operator.execute)
-                optimized_func(context)
+                success = False
+                retry_count = 0
+                while not success:
+                    try:
+                        optimized_func = self.optimize_function(operator.execute)
+                        optimized_func(context)
+                        success = True
+                    except Exception as e:
+                        if retry_count >= operator.retries:
+                            raise e
+                        retry_count += 1
 
         return pipeline_function
     

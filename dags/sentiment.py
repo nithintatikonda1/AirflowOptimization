@@ -30,6 +30,7 @@ def get_sentences_from_api(**kwargs):
 
     r = requests.get("https://manateejokesapi.herokuapp.com/manatees/random")
     df = pd.json_normalize(r.json())
+    print("DF SIZE: ", len(df))
     df.columns = [col_name.upper() for col_name in df.columns]
     df = df.rename(columns={"ID": "JOKE_ID"})
 
@@ -130,4 +131,5 @@ with DAG(
     in_data >> transformed_data
     transformed_data >> run_model
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

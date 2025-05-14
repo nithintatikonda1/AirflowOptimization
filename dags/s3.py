@@ -72,4 +72,5 @@ with DAG(dag_id='s3_upload',
 
         t0 >> generate_files
 
-    fused_dag = create_optimized_dag(dag, timing=True)
+    fused_dag = create_optimized_dag(dag, parallelize=False)
+    optimized_dag = create_optimized_dag(dag)

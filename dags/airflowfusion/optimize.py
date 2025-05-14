@@ -183,7 +183,7 @@ def optimize_integer_program(predecessors, fusion_possible, c, t, r):
     m.setObjective(d[dummy_starting_task], GRB.MINIMIZE)
 
     # Set time limit
-    m.setParam(GRB.Param.TimeLimit, 1200)
+    m.setParam(GRB.Param.TimeLimit, 300)
 
     # Solve 
     m.optimize()
